@@ -28,6 +28,8 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, SM_WIDTH, SM_HEIGHT, SM_C
 // and this may be larger than kMatrixWidth*kMatrixHeight.  Use the SMARTMATRIX_ALLOCATE_GFX_MONO_LAYER macro, which allows for setting the character bitmap
 // to different size than the matrix bounds.  We allocate several times the default amount of memory here:
 SMARTMATRIX_ALLOCATE_GFX_MONO_LAYER(scrollingLayer, SM_WIDTH, SM_HEIGHT, SM_WIDTH * 2, SM_HEIGHT, SM_COLOR_DEPTH, kScrollingLayerOptions);
+AniType aniTypeArray[SM_NUM_LEDS];
+uint16_t notNeeded[SM_NUM_LEDS];
 
 /* --------------------------------------------------------------------------------------------
  *                 MtxMgr()
@@ -100,13 +102,17 @@ bool MtxMgr::syncInit()
     matrix.begin();
     delay(10);
 
+    backgroundLayer.setDrawnPixelBuffer(notNeeded);
+
     matrix.setBrightness(SM_INITIAL_BRIGHTNESS);
 
     val = 0;
 
     //backgroundLayer.setDrawnPixelBuffer(ledBuff);
     //memset((void *)aniI.owners, ANI_TYPE_FREE, sizeof(aniI.owners));
-    ANI_Init();
+    Serial.printf("aniTypeArray before: 0x%x\r\n", aniTypeArray[0]);
+    ANI_Init(aniTypeArray);
+    Serial.printf("aniTypeArray after: 0x%x\r\n", aniTypeArray[0]);
 
     InitNode(&aniPackArray[0].node);
     aniPackArray[0].funcp = ANIFUNC_Confetti;
@@ -120,7 +126,7 @@ bool MtxMgr::syncInit()
     aniPackArray[1].funcp = ANIFUNC_PlazInt;
     aniPackArray[1].type = ANI_TYPE_FOREGROUND;
     aniPackArray[1].parms.counter = 100;
-    aniPackArray[1].parms.fpsLimit = 35;
+    aniPackArray[1].parms.fpsLimit = 60;
     aniPackArray[1].parms.type = 0;
 
     InitNode(&aniPackArray[2].node);
@@ -133,9 +139,24 @@ bool MtxMgr::syncInit()
     aniPackArray[2].parms.scale = 10;
     aniPackArray[2].parms.type = 0;
 
+    InitNode(&aniPackArray[3].node);
+    aniPackArray[3].funcp = [](AniParms *Ap, AniType At) {
+        backgroundLayer.setPixelPermission((uint16_t*)aniTypeArray, 0);
+        NETMGR_LineSwipeR(Ap, At);
+    };
+    //aniPackArray[3].funcp =         NETMGR_LineSwipeR;
+    aniPackArray[3].type = ANI_TYPE_TRANS_SWIPE;
+    aniPackArray[3].parms.hue = 0;
+    aniPackArray[3].parms.fpsLimit = SM_WIDTH / 3; // about 3 seconds
+    aniPackArray[3].parms.p.trans.transTime = 4000;
+    aniPackArray[3].parms.speed = 10;
+    aniPackArray[3].parms.scale = 10;
+    aniPackArray[3].parms.type = 0;
+
     ANI_AddAnimation(&aniPackArray[0], ANI_TYPE_FOREGROUND);
     ANI_AddAnimation(&aniPackArray[1], ANI_TYPE_FOREGROUND);
-    ANI_AddAnimation(&aniPackArray[2], ANI_TYPE_TRANS_SWIPE);
+    //ANI_AddAnimation(&aniPackArray[2], ANI_TYPE_TRANS_SWIPE);
+    ANI_AddAnimation(&aniPackArray[3], ANI_TYPE_TRANS_SWIPE);
 
     ANI_QueueAnimation(&aniPackArray[val]);
     ANI_SwapAnimation();
@@ -167,9 +188,25 @@ void MtxMgr::run()
         val = (val + 1) % 2;
         Serial.printf("Swapping!! %d\n\r", val);
         ANI_QueueAnimation(&aniPackArray[val]);
-        ANI_QueueAnimation(&aniPackArray[2]);
+        ANI_QueueAnimation(&aniPackArray[3]);
         ANI_SwapAnimation();
     }
 }
 
+
+void MtxMgr::NETMGR_LineSwipeR(AniParms *Ap, AniType At)
+{
+    CHSV   hsv;
+    CRGB   crgb;
+
+    if (Ap->value < SM_WIDTH) {
+        hsv.hue = Ap->hue;
+        hsv.val = 255;
+        hsv.sat = 240;
+        crgb = hsv;
+        backgroundLayer.drawFastVLine(Ap->value, 0, SM_HEIGHT, (rgb24)crgb);
+        Ap->value++;
+        Ap->hue += Ap->speed;
+    }
+}
 

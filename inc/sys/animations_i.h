@@ -44,7 +44,7 @@ typedef struct _AniInfo {
     bool        tranInProg;
 
     /* Which of the three functions is permitted to writing to the indexed LED */
-    AniType     owners[SM_NUM_LEDS];
+    AniType     *owners;
 
     /* The LED pixel number that was recently drawn to */
     //uint32_t    drawn[SM_NUM_LEDS];

@@ -35,7 +35,7 @@ static void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, rgb24 *RgbVal)
  *
  * Returns:        void
  */
-void ANI_Init()
+void ANI_Init(AniType *OwnerArray)
 {
     uint16_t i;
     InitList(&aniInfo.activeList);
@@ -44,10 +44,16 @@ void ANI_Init()
     InitList(&aniInfo.queueList);
     aniInfo.numMainWaiting = 0;
     aniInfo.numTransWaiting = 0;
+    aniInfo.owners = OwnerArray;
 
+    Serial.printf("aniTypeArray before: 0x%x\r\n", aniInfo.owners[0]);
     for (i = 0; i < SM_NUM_LEDS; i++) {
         aniInfo.owners[i] = ANI_TYPE_FREE;
     }
+    if (aniInfo.owners != OwnerArray) {
+        Serial.println("not equal!!");
+    }
+    Serial.printf("aniTypeArray after: 0x%x\r\n", aniInfo.owners[0]);
 }
 
 /* --------------------------------------------------------------------------------------------
@@ -126,11 +132,9 @@ bool ANI_QueueAnimation(AniPack *Ap)
     if ((Ap->type & ANI_TYPE_MAIN_OFFSET) && IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
         RemoveNode(&Ap->node);
         aniInfo.numMainWaiting--;
-        Serial.println("In Queue for main");
     } else if ((Ap->type & ANI_TYPE_TRANS_OFFSET) && IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) {
         RemoveNode(&Ap->node);
         aniInfo.numTransWaiting--;
-        Serial.println("In Queue for off");
     } else {
         return false;
     }

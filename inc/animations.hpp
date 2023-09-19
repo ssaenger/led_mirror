@@ -280,7 +280,7 @@ struct _AniPack {
  * --------------------------------------------------------------------------------------------
  */
 
-void ANI_Init();
+void ANI_Init(AniType *OwnerArray);
 
 /* Adds an unused AniPack to an animation list of the type "At" */
 bool ANI_AddAnimation(AniPack *Ap, AniType At);
