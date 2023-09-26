@@ -17,7 +17,6 @@ static uint16_t numWritten;
 static void AniSetInactive(AniPack *Ap);
 static void AniTransDone();
 static bool AniCheckTranDel(AniParms *Ap);
-static void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, rgb24 *RgbVal);
 
 /* --------------------------------------------------------------------------------------------
  *  PUBLIC FUNCTIONS
@@ -369,7 +368,7 @@ void ANIFUNC_FillNoise8(AniParms *Ap, AniType At)
             chsv.setHSV(Ap->hue + (noise[y][x]), 255, noise[x][y]);
             //chsv.setHSV(noise[y][x], 255, noise[x][y]);
             crgb = chsv;
-            writePixel(Ap, At, pixNum, (rgb24*)&crgb);
+            writePixel(Ap, At, pixNum, crgb);
         }
     }
 }
@@ -424,17 +423,17 @@ void ANIFUNC_Glitter(AniParms *Ap, AniType At)
             return;
         }
 
-        writePixel(Ap, At, pXY(x, y), &rgb);
-        writePixel(Ap, At, pXY(x + 1, y), &rgb);
-        writePixel(Ap, At, pXY(x - 1, y), &rgb);
-        writePixel(Ap, At, pXY(x, y + 1), &rgb);
-        writePixel(Ap, At, pXY(x, y - 1), &rgb);
+        writePixel(Ap, At, pXY(x, y), rgb);
+        writePixel(Ap, At, pXY(x + 1, y), rgb);
+        writePixel(Ap, At, pXY(x - 1, y), rgb);
+        writePixel(Ap, At, pXY(x, y + 1), rgb);
+        writePixel(Ap, At, pXY(x, y - 1), rgb);
 
     }
 //    Serial.printf("printed %d. max iter %d\r\n", numWritten - totNum, maxItr);
 }
 
-/*
+
 uint8_t const exp_gamma[256] =
 {0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,
 4,4,4,4,4,5,5,5,5,5,6,6,6,7,7,7,7,8,8,8,9,9,9,10,10,10,11,11,12,12,12,13,13,14,14,14,15,15,
@@ -446,7 +445,7 @@ uint8_t const exp_gamma[256] =
 177,179,181,183,185,187,190,192,194,196,198,200,202,204,207,209,211,213,216,218,220,222,225,
 227,229,232,234,236,239,241,244,246,249,251,253,254,255
 };
-*/
+
 
 /* --------------------------------------------------------------------------------------------
  *                 ANIFUNC_PlazInt()
@@ -471,8 +470,8 @@ void ANIFUNC_PlazInt(AniParms *Ap, AniType At)
 
     Ap->counter++;
     t  = cubicwave8((33 * Ap->counter)/100); // time displacement
-    t2 = cubicwave8((11 * Ap->counter)/100); // fiddle with these
-    t3 = cubicwave8((8 * Ap->counter)/100); // to change looks
+    t2 = cubicwave8((8 * Ap->counter)/100); // fiddle with these
+    t3 = cubicwave8((15 * Ap->counter)/100); // to change looks
     for (x = 0; x < SM_WIDTH; x++) {
         for (y = 0; y < SM_HEIGHT; y++) {
             //Calculate 3 seperate plasma waves, one for each color channel
@@ -480,10 +479,13 @@ void ANIFUNC_PlazInt(AniParms *Ap, AniType At)
                     cubicwave8((t2 + (y << 3)))));
             led.g = cubicwave8(((y << 3) + t +
                     cubicwave8(((t3 >> 2) + (x << 3)))));
-            led.b = cubicwave8(((y << 3) + t2 +
-                    cubicwave8((t + x + (led.g >> 2)))));
-            led = applyGamma_video(led, 2.1);
-            writePixel(Ap, At, pXY(x, y), (rgb24*)&led);
+            led.b = triwave8(((y << 3) + t2 +
+                    triwave8((t + x + (led.g >> 2)))));
+            led.b = exp_gamma[led.b];
+            led.g = exp_gamma[led.g];
+            led.r = exp_gamma[led.r];
+            //led = applyGamma_video(led, 2.1);
+            writePixel(Ap, At, pXY(x, y), led);
 
         }
     }
@@ -509,7 +511,7 @@ void ANIFUNC_Rainbow(AniParms *Ap, AniType At)
     hsv.sat = 240;
     for( int i = 0; i < SM_NUM_LEDS; ++i) {
         crgb = hsv;
-        writePixel(Ap, At, i, (rgb24*)&crgb);
+        writePixel(Ap, At, i, crgb);
         hsv.hue += Ap->speed;
     }
 
@@ -538,7 +540,7 @@ void ANIFUNC_Confetti(AniParms *Ap, AniType At)
             //Serial.printf("Before crgb r,b,g (%d,%d,%d)\r\n", crgb.r, crgb.b, crgb.g);
             crgb.nscale8(Ap->scale);
             //Serial.printf("After crgb r,b,g (%d,%d,%d)\r\n", crgb.r, crgb.b, crgb.g);
-            writePixel(Ap, Ap->type, i, (rgb24*)&crgb);
+            writePixel(Ap, Ap->type, i, crgb);
             if (!crgb) {
                 aniInfo.owners[i] &= 0x00FF;
             }
@@ -548,7 +550,7 @@ void ANIFUNC_Confetti(AniParms *Ap, AniType At)
     written = numWritten;
     i = random16(SM_NUM_LEDS);
     crgb = CHSV(Ap->hue + random8(64), 200, 255);
-    writePixel(Ap, At, i, (rgb24*)&crgb);
+    writePixel(Ap, At, i, crgb);
     if (numWritten > written) {
         /* Assign that to new value */
         aniInfo.owners[i] |= Ap->type;
@@ -675,7 +677,7 @@ bool AniCheckTranDel(AniParms *Ap)
  *
  * Returns:        
  */
-void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, rgb24 *RgbVal)
+void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, const rgb24 &RgbVal)
 {
     if (PixNum >= SM_NUM_LEDS) {
         //Serial.println("Overbounds!");
@@ -736,7 +738,7 @@ void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, rgb24 *RgbVal)
     return;
 
 write:
-    aniInfo.ledBuff[PixNum] = *RgbVal;
+    aniInfo.ledBuff[PixNum] = RgbVal;
 skip:
     //aniInfo.drawn[*PixIndx] = PixNum; /* commented because I don't think i need this anymore after optimizations. */
     numWritten++;

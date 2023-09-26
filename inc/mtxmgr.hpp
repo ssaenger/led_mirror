@@ -64,6 +64,7 @@ public:
 
 protected:
     rgb24    *ledBuff;
+    rgb24    *ledBuff2;
 
 private:
     MtxMgr();

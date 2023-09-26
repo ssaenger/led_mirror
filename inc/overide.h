@@ -29,4 +29,9 @@
 #define SM_WIDTH 128
 //#define SM_REFRESH_DEPTH 36
 
+/* audiosync.hpp */
+#define AS_MAX_LEVEL 0.20f
+#define AS_DYNAMIC_RANGE 30.0f
+#define AS_LINEAR_BLEND 0.5f
+
 #endif /* _OVERIDE_H_ */

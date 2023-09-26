@@ -39,6 +39,18 @@ typedef struct _AniPack AniPack;
 #define pXY(x, y)  (SM_WIDTH) * (y) + (x)
 
 /* --------------------------------------------------------------------------------------------
+ * pXY_BtoT macro
+ *
+ * Calculates the pixel number from a x,y coordinates from Bottom Left 2 Top Right
+ *
+ */
+#define pXY_BL(x, y)  SM_WIDTH * (SM_HEIGHT - 1) + (x) - ((y) * SM_WIDTH)
+
+// #define SM_HEIGHT 64
+// #define SM_WIDTH 128
+// NUM LED          8,192
+
+/* --------------------------------------------------------------------------------------------
  * fps2Ms macro
  *
  * Calculates the ms window given the fps target. For example, if fps is 100, then there are
@@ -296,6 +308,9 @@ void ANI_SwapAnimation();
 
 /* Fills out the LedBuff with animations :3 */
 uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff);
+
+// Writes the pixel to the PixNum LED if it has permission to
+void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, const rgb24 &RgbVal);
 
 /* Group: The following functions are animation functions of type AniFunc */
 

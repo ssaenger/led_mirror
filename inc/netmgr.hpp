@@ -10,8 +10,8 @@
  * ********************************************************************************************
  */
 
-#ifndef _NET_MGR_HPP_
-#define _NET_MGR_HPP_
+#ifndef _NETMGR_HPP_
+#define _NETMGR_HPP_
 
 #include <teensyupdater.hpp>
 #include "sys/netmgr_i.h"
@@ -167,4 +167,4 @@ private:
 
 };
 
-#endif /* _NET_MGR_HPP_ */
+#endif /* _NETMGR_HPP_ */
