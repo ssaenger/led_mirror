@@ -35,6 +35,7 @@ static AudioConnection patchCord3(mixer1, fft1024);
 static uint16_t fftBins[SM_WIDTH];
 static float levelThreshVert[SM_HEIGHT];
 static float levelThreshHoriz[SM_WIDTH];
+static uint8_t shownBinLevel[SM_WIDTH];
 
 /* --------------------------------------------------------------------------------------------
  *  PROTOTYPES
@@ -61,9 +62,14 @@ static float FindE(uint16_t Bands, uint16_t Bins);
  */
 void AS_Init()
 {
-    AudioMemory(12);
+    uint16_t i;
+    AudioMemory(18);
     AS_CalcFftBins(SM_WIDTH);
     AS_CalcLevelThresh(AS_MAX_LEVEL, AS_DYNAMIC_RANGE, AS_LINEAR_BLEND);
+    for (i = 0; i < SM_WIDTH; i += 2) {
+        shownBinLevel[i] = 0;
+        shownBinLevel[i + 1] = 0;
+    }
 }
 
 /* --------------------------------------------------------------------------------------------
@@ -221,21 +227,105 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
 /* --------------------------------------------------------------------------------------------
  *                 AS_PlotFftBottom()
  * --------------------------------------------------------------------------------------------
- * Description:
+ * Description: Reads FFT data from an audio stream and displays the frequencies shooting
+ *              up from the bottom of the matrix
  *
- * Parameters:
+ * Parameters:  Ap - Pointer to AniParms data where:
+ *                   hue: specifies hue color (rgb color from the color wheel)
+ *                   aff: ANI_EFFECT_1 - increase hue color along y-axis Can't be used with 2
+ *                        ANI_EFFECT_2 - increase hue color along x-axis. Can't be used with 1.
+ *                        ANI_EFFECT_3 - subtly apply a "fall" affect to each bin. This means
+ *                                       instead of just removing a drawn bar in a bin when
+ *                                       the fft data doesn't meet a certian threshold, the drawn
+ *                                       bar will decrease in size until it goes to 0 or until
+ *                                       fft data exceeds the size of the drawn bar.
+ *                   maxBright: brightness of each drawn bar
+ *                   speed: speed the hue color cycles. 0 means static hue color
+ *              At - Type of animation (Recommendation: ANI_TYPE_FOREGROUND)
  *
- * Returns:
+ * Returns:     void
  */
 void AS_PlotFftBottom(AniParms *Ap, AniType At)
 {
     float level;
     int16_t x, y;
     uint16_t prevFreqBin;
+    uint8_t yMax;
 
     CHSV hsv;
     CRGB crgb;
-    CRGB crgbBlack = CRGB::Black;
+    const CRGB crgbBlack = CRGB::Black;
+
+    hsv.hue = Ap->hue;
+    hsv.val = 255;
+    hsv.sat = Ap->maxBright;
+    crgb = hsv;
+
+    if (fft1024.available()) {
+        Ap->hue += Ap->speed;
+
+        prevFreqBin = 0;
+        for (x = 0; x < SM_WIDTH; x++) {
+            //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
+            level = fft1024.read(prevFreqBin, fftBins[x]);
+            yMax = 1;
+            if (Ap->aff & ANI_EFFECT_2) {
+                hsv.hue = Ap->hue + x;
+                crgb = hsv;
+            }
+
+            writePixel(Ap, At, pXY_BL(x, 0), crgb);
+            for (y = 1; y < SM_HEIGHT; y++) {
+
+                if (level >= levelThreshVert[y] || y <= shownBinLevel[x]) {
+                    if (Ap->aff & ANI_EFFECT_1) {
+                        hsv.hue = Ap->hue + y;
+                        crgb = hsv;
+                    }
+                    writePixel(Ap, At, pXY_BL(x, y), crgb);
+                    yMax = y;
+                } else {
+                    /* Black out this Pixel. All pixels above are already blacked out so exit loop */
+                    writePixel(Ap, At, pXY_BL(x, y), crgbBlack);
+                    break;
+                }
+            }
+
+            prevFreqBin = fftBins[x] + 1;
+            shownBinLevel[x] = (Ap->aff & ANI_EFFECT_3) ? yMax - 1 : 0;
+
+        }
+    } else {
+        writePixel(Ap, At, pXY_BL(Ap->hue % SM_WIDTH, SM_HEIGHT - 1), crgb);
+        if (Ap->aff & ANI_EFFECT_3) {
+            /* No FFT data, but lower the bin levels for that subtle fall affect. */
+            for (x = 0; x < SM_WIDTH; x++) {
+                writePixel(Ap, At, pXY_BL(x, shownBinLevel[x] + 1), crgbBlack);
+                shownBinLevel[x] = shownBinLevel[x] > 0 ? shownBinLevel[x] - 1 : shownBinLevel[x];
+            }
+        }
+    }
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 AS_PlotFftMidSpace()
+ * --------------------------------------------------------------------------------------------
+ * Description:
+ *
+ * Parameters:
+ *
+ * Returns:
+ */
+void AS_PlotFftMidSpace(AniParms *Ap, AniType At)
+{
+    float level;
+    int16_t x, y;
+    uint16_t prevFreqBin;
+    uint8_t yMax;
+
+    CHSV hsv;
+    CRGB crgb;
+    const CRGB crgbBlack = CRGB::Black;
 
     hsv.hue = Ap->hue;
     hsv.val = 255;
@@ -249,23 +339,94 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
         for (x = 0; x < SM_WIDTH; x++) {
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
-            for (y = 1; y < SM_HEIGHT; y++) {
+            for (y = 1; y < SM_HEIGHT / 2 - 1; y++) {
 
-                if (level >= levelThreshVert[y]) {
-                    writePixel(Ap, At, pXY_BL(x, y), crgb);
+                if (level >= levelThreshVert[y * 2 + 1]) {
+                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2 + 1), crgb);
+                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2 + 1), crgb);
+                    yMax = y;
                 } else {
-                    writePixel(Ap, At, pXY_BL(x, y), crgbBlack);
+                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2 + 1), crgbBlack);
+                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2 + 1), crgbBlack);
                 }
             }
             // fix always on LEDs
-            writePixel(Ap, At, pXY_BL(x, 0), crgb);
+            writePixel(Ap, At, pXY(x, SM_HEIGHT / 2), crgb);
+            writePixel(Ap, At, pXY_BL(x, SM_HEIGHT / 2), crgb);
             prevFreqBin = fftBins[x] + 1;
 
         }
     } else {
-        writePixel(Ap, At, pXY_BL(SM_WIDTH - 1, SM_HEIGHT - 1), crgb);
+        writePixel(Ap, At, pXY_BL(Ap->hue % SM_WIDTH, SM_HEIGHT - 1), crgb);
     }
 }
+
+/* --------------------------------------------------------------------------------------------
+ *                 AS_PlotFftMid()
+ * --------------------------------------------------------------------------------------------
+ * Description:
+ *
+ * Parameters:
+ *
+ * Returns:
+ */
+void AS_PlotFftMid(AniParms *Ap, AniType At)
+{
+    float level;
+    int16_t x, y;
+    uint16_t prevFreqBin;
+    uint8_t yMax;
+
+    CHSV hsv;
+    CRGB crgb;
+    const CRGB crgbBlack = CRGB::Black;
+
+    hsv.hue = Ap->hue;
+    hsv.val = 255;
+    hsv.sat = Ap->maxBright;
+    crgb = hsv;
+
+    if (fft1024.available()) {
+        Ap->hue += Ap->speed;
+
+        prevFreqBin = 0;
+        for (x = 0; x < SM_WIDTH; x++) {
+            //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
+            level = fft1024.read(prevFreqBin, fftBins[x]);
+            yMax = 1;
+
+            // fix always on LEDs
+            writePixel(Ap, At, pXY(x, SM_HEIGHT / 2), crgb);
+            writePixel(Ap, At, pXY_BL(x, SM_HEIGHT / 2), crgb);
+            for (y = 1; y < SM_HEIGHT / 2; y++) {
+
+                if (level >= levelThreshVert[y * 2] || y <= shownBinLevel[x]) {
+                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2), crgb);
+                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2), crgb);
+                    yMax = y;
+                } else {
+                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2), crgbBlack);
+                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2), crgbBlack);
+                    break;
+                }
+            }
+            prevFreqBin = fftBins[x] + 1;
+            shownBinLevel[x] = (Ap->aff & ANI_EFFECT_3) ? yMax - 1 : 0;
+
+        }
+    } else {
+        writePixel(Ap, At, pXY_BL(Ap->hue % SM_WIDTH, SM_HEIGHT - 1), crgb);
+        if (Ap->aff & ANI_EFFECT_3) {
+            /* No FFT data, but lower the bin levels for that subtle fall affect. */
+            for (x = 0; x < SM_WIDTH; x++) {
+                writePixel(Ap, At, pXY(x, shownBinLevel[x] + SM_HEIGHT / 2 + 1), crgbBlack);
+                writePixel(Ap, At, pXY_BL(x, shownBinLevel[x] + SM_HEIGHT / 2 + 1), crgbBlack);
+                shownBinLevel[x] = shownBinLevel[x] > 0 ? shownBinLevel[x] - 1 : shownBinLevel[x];
+            }
+        }
+    }
+}
+
 
 /* --------------------------------------------------------------------------------------------
  *  PRIVATE FUNCTIONS

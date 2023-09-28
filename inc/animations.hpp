@@ -183,6 +183,31 @@ typedef uint16_t AniType;
 
 /* End AniType type */
 
+/* --------------------------------------------------------------------------------------------
+ * AniEffect type
+ *
+ * Bitmask of different effects to apply to an animation. Each animation will describe what
+ * each value means
+ */
+typedef uint8_t AniEffect;
+
+/* Apply no special affects to the animation */
+#define ANI_EFFECT_NONE          0x00
+
+/* Apply special effect 1 */
+#define ANI_EFFECT_1             0x01
+
+/* Apply special effect 2 */
+#define ANI_EFFECT_2             0x02
+
+/* Apply special effect 3 */
+#define ANI_EFFECT_3             0x04
+
+/* Apply special effect 4 */
+#define ANI_EFFECT_4             0x08
+
+/* End AniEffect type */
+
 
 /* --------------------------------------------------------------------------------------------
  * AniParms type
@@ -195,6 +220,8 @@ typedef struct _AniParms {
 
     /* The current Hue value */
     uint8_t hue;
+
+    CRGB::HTMLColorCode color;
 
     /* Speed value */
     uint16_t speed;
@@ -213,7 +240,8 @@ typedef struct _AniParms {
 
     AniType type;
 
-    CRGB::HTMLColorCode color;
+    AniEffect aff;
+
 
     /* An additional animation function pointer that is used to blend animations together */
     //AniFunc aniBlendFunc;

@@ -165,8 +165,20 @@ bool MtxMgr::syncInit()
     aniPackArray[5].type = ANI_TYPE_FOREGROUND;
     aniPackArray[5].parms.hue = 0;
     aniPackArray[5].parms.speed = 1;
+    aniPackArray[5].parms.maxBright = 200;
+    aniPackArray[5].parms.aff = ANI_EFFECT_2 | ANI_EFFECT_3;
     aniPackArray[5].parms.fpsLimit = matrix.getRefreshRate();
     aniPackArray[5].parms.type = 0;
+
+    InitNode(&aniPackArray[6].node);
+    aniPackArray[6].funcp = AS_PlotFftMid;
+    aniPackArray[6].type = ANI_TYPE_FOREGROUND;
+    aniPackArray[6].parms.hue = 0;
+    aniPackArray[6].parms.speed = 1;
+    aniPackArray[6].parms.maxBright = 100;
+    aniPackArray[6].parms.aff = ANI_EFFECT_3;
+    aniPackArray[6].parms.fpsLimit = matrix.getRefreshRate();
+    aniPackArray[6].parms.type = 0;
 
     ANI_AddAnimation(&aniPackArray[0], ANI_TYPE_FOREGROUND);
     ANI_AddAnimation(&aniPackArray[1], ANI_TYPE_FOREGROUND);
@@ -174,8 +186,9 @@ bool MtxMgr::syncInit()
     ANI_AddAnimation(&aniPackArray[3], aniPackArray[3].type);
     ANI_AddAnimation(&aniPackArray[4], aniPackArray[4].type);
     ANI_AddAnimation(&aniPackArray[5], aniPackArray[5].type);
+    ANI_AddAnimation(&aniPackArray[6], aniPackArray[6].type);
 
-    ANI_QueueAnimation(&aniPackArray[5]);
+    ANI_QueueAnimation(&aniPackArray[6]);
     ANI_SwapAnimation();
 
     Serial.println(matrix.getRefreshRate());
