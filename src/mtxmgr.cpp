@@ -14,6 +14,7 @@
 #include "../inc/mtxmgr.hpp"
 #include "../inc/smartmtxconfig.h"
 #include "../inc/audiosync.hpp"
+#include "../inc/gifDecoder.hpp"
 
 SMARTMATRIX_ALLOCATE_BUFFERS(matrix, SM_WIDTH, SM_HEIGHT, SM_REFRESH_DEPTH, SM_DMA_BUFF_ROWS, kPanelType, kMatrixOptions);
 SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, SM_WIDTH, SM_HEIGHT, SM_COLOR_DEPTH, kBackgroundLayerOptions);
@@ -40,6 +41,7 @@ MtxMgr::MtxMgr()
     pix.red = 0x00;
     pix.green = 0x00;
     pix.blue = 0x00;
+    
 
     // backgroundLayer.fillScreen(rgb24(0xff, 0xff, 0xff));
     // backgroundLayer.fillScreen(SM_RGB(0xff, 0xff, 0xff));
@@ -93,6 +95,10 @@ bool MtxMgr::syncInit()
 
     ANI_Init(aniTypeArray);
     AS_Init();
+    if (!GIFDEC_Init()) {
+        // TODO: prevent adding gif animation
+        Serial.println("Could not initialize gif");
+    }
 
 
     //matrix.setRefreshRate(60);
@@ -108,9 +114,7 @@ bool MtxMgr::syncInit()
 
     //backgroundLayer.setDrawnPixelBuffer(ledBuff);
     //memset((void *)aniI.owners, ANI_TYPE_FREE, sizeof(aniI.owners));
-    Serial.printf("aniTypeArray before: 0x%x\r\n", aniTypeArray[0]);
     ANI_Init(aniTypeArray);
-    Serial.printf("aniTypeArray after: 0x%x\r\n", aniTypeArray[0]);
 
     InitNode(&aniPackArray[0].node);
     aniPackArray[0].funcp = ANIFUNC_Confetti;
@@ -118,13 +122,13 @@ bool MtxMgr::syncInit()
     aniPackArray[0].parms.hue = 190;
     aniPackArray[0].parms.scale = 240;
     aniPackArray[0].parms.type = ANI_TYPE_SPECIAL_1;
-    aniPackArray[0].parms.fpsLimit = 35;
+    aniPackArray[0].parms.fpsTarg = 35;
 
     InitNode(&aniPackArray[1].node);
     aniPackArray[1].funcp = ANIFUNC_PlazInt;
     aniPackArray[1].type = ANI_TYPE_FOREGROUND;
     aniPackArray[1].parms.counter = 100;
-    aniPackArray[1].parms.fpsLimit = 60;
+    aniPackArray[1].parms.fpsTarg = 60;
     aniPackArray[1].parms.type = 0;
 
     InitNode(&aniPackArray[2].node);
@@ -132,7 +136,7 @@ bool MtxMgr::syncInit()
     aniPackArray[2].type = ANI_TYPE_TRANS_SWIPE;
     aniPackArray[2].parms.color = CRGB::Black;
     aniPackArray[2].parms.p.trans.transTime = 3000;
-    aniPackArray[2].parms.fpsLimit = 40;
+    aniPackArray[2].parms.fpsTarg = 40;
     aniPackArray[2].parms.counter = 0;
     aniPackArray[2].parms.scale = 10;
     aniPackArray[2].parms.type = 0;
@@ -144,7 +148,7 @@ bool MtxMgr::syncInit()
     //aniPackArray[3].funcp =         NETMGR_LineSwipeR;
     aniPackArray[3].type = ANI_TYPE_TRANS_SWIPE;
     aniPackArray[3].parms.hue = 0;
-    aniPackArray[3].parms.fpsLimit = SM_WIDTH / 2; // about 2 seconds
+    aniPackArray[3].parms.fpsTarg = SM_WIDTH / 2; // about 2 seconds
     aniPackArray[3].parms.p.trans.transTime = 4000;
     aniPackArray[3].parms.speed = 3;
     aniPackArray[3].parms.scale = 0;
@@ -157,28 +161,42 @@ bool MtxMgr::syncInit()
     aniPackArray[4].type = ANI_TYPE_FOREGROUND;
     aniPackArray[4].parms.hue = 0;
     aniPackArray[4].parms.speed = 1;
-    aniPackArray[4].parms.fpsLimit = matrix.getRefreshRate();
+    aniPackArray[4].parms.fpsTarg = matrix.getRefreshRate();
     aniPackArray[4].parms.type = 0;
 
     InitNode(&aniPackArray[5].node);
-    aniPackArray[5].funcp = AS_PlotFftBottom;
+    aniPackArray[5].funcp = AS_PlotFftTop;
     aniPackArray[5].type = ANI_TYPE_FOREGROUND;
-    aniPackArray[5].parms.hue = 0;
-    aniPackArray[5].parms.speed = 1;
+    aniPackArray[5].parms.hue = 88;
+    aniPackArray[5].parms.speed = 0;
     aniPackArray[5].parms.maxBright = 200;
-    aniPackArray[5].parms.aff = ANI_EFFECT_2 | ANI_EFFECT_3;
-    aniPackArray[5].parms.fpsLimit = matrix.getRefreshRate();
+    aniPackArray[5].parms.aff = ANI_EFFECT_1 | ANI_EFFECT_3;
+    aniPackArray[5].parms.fpsTarg = 1000;
     aniPackArray[5].parms.type = 0;
 
     InitNode(&aniPackArray[6].node);
     aniPackArray[6].funcp = AS_PlotFftMid;
     aniPackArray[6].type = ANI_TYPE_FOREGROUND;
-    aniPackArray[6].parms.hue = 0;
-    aniPackArray[6].parms.speed = 1;
+    aniPackArray[6].parms.hue = HUE_RED;
+    aniPackArray[6].parms.speed = 0;
     aniPackArray[6].parms.maxBright = 100;
     aniPackArray[6].parms.aff = ANI_EFFECT_3;
-    aniPackArray[6].parms.fpsLimit = matrix.getRefreshRate();
+    aniPackArray[6].parms.fpsTarg = matrix.getRefreshRate();
     aniPackArray[6].parms.type = 0;
+
+    InitNode(&aniPackArray[7].node);
+    aniPackArray[7].funcp = ANIFUNC_Rainbow;
+    aniPackArray[7].type = ANI_TYPE_BACKGROUND;
+    aniPackArray[7].parms.hue = HUE_RED;
+    aniPackArray[7].parms.speed = 0;
+    aniPackArray[7].parms.maxBright = 70;
+    aniPackArray[7].parms.fpsTarg = 1000;
+
+    InitNode(&aniPackArray[8].node);
+    aniPackArray[8].funcp = GIFDEC_Play;
+    aniPackArray[8].type = ANI_TYPE_BACKGROUND;
+    aniPackArray[8].parms.counter = 7;
+    aniPackArray[8].parms.fpsTarg = 15;
 
     ANI_AddAnimation(&aniPackArray[0], ANI_TYPE_FOREGROUND);
     ANI_AddAnimation(&aniPackArray[1], ANI_TYPE_FOREGROUND);
@@ -187,8 +205,11 @@ bool MtxMgr::syncInit()
     ANI_AddAnimation(&aniPackArray[4], aniPackArray[4].type);
     ANI_AddAnimation(&aniPackArray[5], aniPackArray[5].type);
     ANI_AddAnimation(&aniPackArray[6], aniPackArray[6].type);
+    ANI_AddAnimation(&aniPackArray[7], aniPackArray[7].type);
+    ANI_AddAnimation(&aniPackArray[8], aniPackArray[8].type);
 
-    ANI_QueueAnimation(&aniPackArray[6]);
+    //ANI_QueueAnimation(&aniPackArray[5]);
+    ANI_QueueAnimation(&aniPackArray[8]);
     ANI_SwapAnimation();
 
     Serial.println(matrix.getRefreshRate());
@@ -235,18 +256,23 @@ void MtxMgr::run()
 #endif
 #if 1
     while(backgroundLayer.isSwapPending());
-    ledBuff = backgroundLayer.backBuffer();
+    ledBuff = backgroundLayer.getRealBackBuffer();
 
     if (ANI_DrawAnimationFrame(ledBuff) != 0) {
-        backgroundLayer.swapBuffers();
+        //Serial.println("Swapping");
+        //rgb24 rgbcolor = ledBuff[60];
+        //Serial.printf("g=%d\r\n", rgbcolor.green);
+        backgroundLayer.swapBuffers(true);
         matrix.countFPS();      // print the loop() frames per second to Serial
     }
-#if 0
+#if 1
     EVERY_N_MILLIS(8'000) {
         //val = (val + 1) % 2;
         //Serial.printf("Swapping!! %d\n\r", val);
-        ANI_QueueAnimation(&aniPackArray[4]);
-        ANI_QueueAnimation(&aniPackArray[3]);
+        //ANI_QueueAnimation(&aniPackArray[4]);
+        //ANI_QueueAnimation(&aniPackArray[3]);
+
+        aniPackArray[8].parms.counter++;
         ANI_SwapAnimation();
     }
 #endif

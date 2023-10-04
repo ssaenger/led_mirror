@@ -236,7 +236,7 @@ typedef struct _AniParms {
 
     uint8_t chance;
 
-    uint8_t fpsLimit;
+    uint16_t fpsTarg;
 
     AniType type;
 
@@ -274,6 +274,7 @@ typedef struct _AniParms {
     /* ~~~~ Internal Only fields ~~~~*/
     uint32_t startTime;
     uint32_t delay;
+    uint16_t last;
     uint8_t  value;
 
 } AniParms;

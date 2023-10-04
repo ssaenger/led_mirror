@@ -1,3 +1,17 @@
+/* ********************************************************************************************
+ * animations.cpp
+ *
+ * Author: Shawn Saenger
+ *
+ * Created: Sep 8, 2023
+ *
+ * Description: Holds the logic to performing advance animations. Manages a list of animation
+ *              function pointers and fills out an RGB buffer. This file also contains
+ *              some animations available for use.
+ *
+ * ********************************************************************************************
+ */
+
 #include "../inc/sys/animations_i.h"
 
 
@@ -270,7 +284,7 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
             }
             continue;
         }
-        aniPack->parms.delay = millis() + fps2Ms(aniPack->parms.fpsLimit);
+        aniPack->parms.delay = millis() + fps2Ms(aniPack->parms.fpsTarg);
 
         //Serial.printf("ANI_DrawAnimationFrame: type 0x%x. delay %lu\r\n", aniPack->type, aniPack->parms.delay);
         switch (aniPack->type) {
@@ -394,7 +408,7 @@ void ANIFUNC_Glitter(AniParms *Ap, AniType At)
         return;
     }
     
-    uint32_t numToChange = SM_NUM_LEDS / (Ap->p.trans.transTime / 1000) / Ap->fpsLimit;
+    uint32_t numToChange = SM_NUM_LEDS / (Ap->p.trans.transTime / 1000) / Ap->fpsTarg;
     numToChange += Ap->scale;
 
     maxItr = 0;
@@ -507,8 +521,8 @@ void ANIFUNC_Rainbow(AniParms *Ap, AniType At)
     CRGB   crgb;
 
     hsv.hue = Ap->hue;
-    hsv.val = 255;
-    hsv.sat = 240;
+    hsv.val = 100;
+    hsv.sat = Ap->maxBright;
     for( int i = 0; i < SM_NUM_LEDS; ++i) {
         crgb = hsv;
         writePixel(Ap, At, i, crgb);
