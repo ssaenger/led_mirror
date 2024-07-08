@@ -213,12 +213,13 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
                 crgb = hsv;
             } else {
                 if (Ap->aff & ANI_EFFECT_3) {
-                    level = max(levelThreshVert[shownBinLevel[x]], level);
+                    /* Overide max level if previous value was greater */
+                    level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
                 }
                 hsv.hue = Ap->hue;
                 crgb = hsv;
             }
-
+            /* First row is always written */
             writePixel(Ap, At, pXY(x, 0), crgb);
             for (y = 1; y < SM_HEIGHT; y++) {
 
@@ -227,32 +228,22 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
                         hsv.hue = Ap->hue + y;
                         crgb = hsv;
                     }
+                    if (x == 0) {
+                        //Serial.printf("writing to y = %d\n\r", y);
+                    }
                     writePixel(Ap, At, pXY(x, y), crgb);
                 } else {
                     /* Black out this Pixel. All pixels above are already blacked out so exit loop */
-                    //writePixel(Ap, At, pXY(x, y), crgbBlack);
+                        /* Need to black out all remain pixels since the last fft draw */
+                    for (i = y; i <= shownBinLevel[x]; i++) {
+                        writePixel(Ap, At, pXY(x, i), crgbBlack);
+                    }
                     break;
                 }
             }
-            y = (y != SM_HEIGHT) ? y - 1 : y;
-            if (!(Ap->aff & ANI_EFFECT_3)) {
-                /* Need to black out all remain pixels since the last fft draw */
-                for (i = y + 1; i <= shownBinLevel[x]; i++) {
-                    writePixel(Ap, At, pXY(x, i), crgbBlack);
-                }
-            }
-            shownBinLevel[x] = y;
+            shownBinLevel[x] = (y > 1) ? y - 1 : 0;
             prevFreqBin = fftBins[x] + 1;
 
-        }
-    } else {
-        writePixel(Ap, At, pXY(0, SM_HEIGHT - 1), crgb);
-        if (Ap->aff & ANI_EFFECT_3) {
-            /* No FFT data, but lower the bin levels for that subtle fall affect. */
-            for (x = 0; x < SM_WIDTH; x++) {
-                writePixel(Ap, At, pXY(x, shownBinLevel[x] + 1), crgbBlack);
-                shownBinLevel[x] = shownBinLevel[x] > 0 ? shownBinLevel[x] - 1 : shownBinLevel[x];
-            }
         }
     }
 }
@@ -283,7 +274,7 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
     float level;
     int16_t x, y;
     uint16_t prevFreqBin;
-    uint8_t yMax;
+    uint8_t i;
 
     CHSV hsv;
     CRGB crgb;
@@ -301,41 +292,43 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
         for (x = 0; x < SM_WIDTH; x++) {
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
-            yMax = 1;
+
             if (Ap->aff & ANI_EFFECT_2) {
                 hsv.hue = Ap->hue + x;
                 crgb = hsv;
+            } else {
+                if (Ap->aff & ANI_EFFECT_3) {
+                    /* Overide max level if previous value was greater */
+                    level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
+                }
+                hsv.hue = Ap->hue;
+                crgb = hsv;
             }
-
+            /* First row is always written */
             writePixel(Ap, At, pXY_BL(x, 0), crgb);
             for (y = 1; y < SM_HEIGHT; y++) {
 
-                if (level >= levelThreshVert[y] || y <= shownBinLevel[x]) {
+                if (level >= levelThreshVert[y]) {
                     if (Ap->aff & ANI_EFFECT_1) {
                         hsv.hue = Ap->hue + y;
                         crgb = hsv;
                     }
+                    if (x == 0) {
+                        //Serial.printf("writing to y = %d\n\r", y);
+                    }
                     writePixel(Ap, At, pXY_BL(x, y), crgb);
-                    yMax = y;
                 } else {
                     /* Black out this Pixel. All pixels above are already blacked out so exit loop */
-                    writePixel(Ap, At, pXY_BL(x, y), crgbBlack);
+                        /* Need to black out all remain pixels since the last fft draw */
+                    for (i = y; i <= shownBinLevel[x]; i++) {
+                        writePixel(Ap, At, pXY_BL(x, i), crgbBlack);
+                    }
                     break;
                 }
             }
-
+            shownBinLevel[x] = (y > 1) ? y - 1 : 0;
             prevFreqBin = fftBins[x] + 1;
-            shownBinLevel[x] = (Ap->aff & ANI_EFFECT_3) ? yMax - 1 : 0;
 
-        }
-    } else {
-        writePixel(Ap, At, pXY_BL(Ap->hue % SM_WIDTH, SM_HEIGHT - 1), crgb);
-        if (Ap->aff & ANI_EFFECT_3) {
-            /* No FFT data, but lower the bin levels for that subtle fall affect. */
-            for (x = 0; x < SM_WIDTH; x++) {
-                writePixel(Ap, At, pXY_BL(x, shownBinLevel[x] + 1), crgbBlack);
-                shownBinLevel[x] = shownBinLevel[x] > 0 ? shownBinLevel[x] - 1 : shownBinLevel[x];
-            }
         }
     }
 }

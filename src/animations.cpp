@@ -223,12 +223,18 @@ void ANI_SwapAnimation()
                 }
             }
         }
+    } else {
+        while (!IsListEmpty(&aniInfo.activeList)) {
+            //Serial.println("ANI_SwapAnimation: 1");
+            aniPack = (AniPack*)GetHead(&aniInfo.activeList);
+            AniSetInactive(aniPack);
+        }
     }
 
     /* Step 3: Move all animations from queue list to active list */
     while (!IsListEmpty(&aniInfo.queueList)) {
         aniPack = (AniPack*)GetHead(&aniInfo.queueList);
-        //Serial.printf("ANI_SwapAnimation: queue type 0x%x\r\n", aniPack->type);
+        Serial.printf("ANI_SwapAnimation: queue type 0x%x\r\n", aniPack->type);
 
         RemoveNode(&aniPack->node);
 
@@ -267,6 +273,7 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
     uint32_t tCount;
     AniPack *aniPack;
     AniPack *aniPack2;
+    
 
     aniInfo.ledBuff = LedBuff;
     numWritten = 0;
@@ -276,7 +283,6 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
     //Serial.println("ANI_DrawAnimationFrame: Begin");
 
     IterateList(aniInfo.activeList, aniPack, AniPack*) {
-
         if (!AniCheckTranDel(&aniPack->parms)) {
             //Serial.prntlin("Skipping not time yet");
             if (aniPack->type & ANI_TYPE_TRANS_OFFSET) {
@@ -331,7 +337,6 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
     if (aniInfo.tranInProg && tCount == 0) {
         AniTransDone();
     }
-
     return numWritten;
 }
 
@@ -693,12 +698,12 @@ bool AniCheckTranDel(AniParms *Ap)
  */
 void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, const rgb24 &RgbVal)
 {
+    AniType pixOwner = aniInfo.owners[PixNum];
     if (PixNum >= SM_NUM_LEDS) {
         //Serial.println("Overbounds!");
         //PixNum = SM_NUM_LEDS - 1;
         return;
     }
-    AniType pixOwner = aniInfo.owners[PixNum];
     //Serial.printf("owner at this pix %d is 0x%x\r\n", PixNum, aniInfo.owners[PixNum]);
 
     switch(At) {

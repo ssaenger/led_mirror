@@ -103,7 +103,8 @@
  */
 #define SM_NUM_LEDS                    (SM_WIDTH * SM_HEIGHT)
 
-const uint8_t kPanelType              = SM_PANELTYPE_HUB75_64ROW_MOD32SCAN; // Choose the configuration that matches your panels.  See more details in MatrixCommonHub75.h and the docs: https://github.com/pixelmatix/SmartMatrix/wiki
+// SMARTMATRIX_HUB75_32ROW_MOD16SCAN for matrix wall, SMARTMATRIX_HUB75_64ROW_MOD32SCAN for cube
+const uint8_t kPanelType              = SMARTMATRIX_HUB75_32ROW_MOD16SCAN; // https://github.com/pixelmatix/SmartMatrix/wiki
 const uint32_t kMatrixOptions         = (SM_HUB75_OPTIONS_NONE);            // see docs for options: https://github.com/pixelmatix/SmartMatrix/wiki
 const uint8_t kScrollingLayerOptions  = (SM_SCROLLING_OPTIONS_NONE);
 #if defined(INCLUDE_FASTLED_BACKGROUND) && defined(USE_ADAFRUIT_GFX_LAYERS)

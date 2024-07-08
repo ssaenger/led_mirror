@@ -25,7 +25,7 @@
 
 /* smartmtxconfig.h */
 //#define SM_COLOR_DEPTH 24
-#define SM_HEIGHT 64
+#define SM_HEIGHT 96
 #define SM_WIDTH 128
 //#define SM_REFRESH_DEPTH 36
 

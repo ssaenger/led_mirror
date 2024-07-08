@@ -53,6 +53,11 @@ class MtxMgr
 public:
     static MtxMgr &getInstance();
     static void NETMGR_LineSwipeR(AniParms *Ap, AniType At);
+    static void NETMGR_LineSwipeL(AniParms *Ap, AniType At);
+    static void NETMGR_LineSwipeU(AniParms *Ap, AniType At);
+    static void NETMGR_LineSwipeD(AniParms *Ap, AniType At);
+
+    static void NETMGR_CircleCenter(AniParms *Ap, AniType At);
 
     /* Init function */
     bool syncInit();

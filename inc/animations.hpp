@@ -242,6 +242,11 @@ typedef struct _AniParms {
 
     AniEffect aff;
 
+    uint16_t x0;
+    uint16_t y0;
+    uint16_t x1;
+    uint16_t y1;
+
 
     /* An additional animation function pointer that is used to blend animations together */
     //AniFunc aniBlendFunc;
