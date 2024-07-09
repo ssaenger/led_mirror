@@ -284,6 +284,9 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
 
     IterateList(aniInfo.activeList, aniPack, AniPack*) {
         if (!AniCheckTranDel(&aniPack->parms)) {
+            /* Not enough time has passed to play this animation since the FPS target
+             * is lower than what we are capable of playing
+             */
             //Serial.prntlin("Skipping not time yet");
             if (aniPack->type & ANI_TYPE_TRANS_OFFSET) {
                 tCount++;
@@ -634,9 +637,9 @@ void AniSetInactive(AniPack *Ap)
 }
 
 /* --------------------------------------------------------------------------------------------
- *                 AniSetInactive()
+ *                 AniTransDone()
  * --------------------------------------------------------------------------------------------
- * Description:    
+ * Description:    Marks an transition type animation as complete
  *
  * Parameters:     
  *
@@ -676,7 +679,8 @@ void AniTransDone()
 /* --------------------------------------------------------------------------------------------
  *                 AniCheckTranDel()
  * --------------------------------------------------------------------------------------------
- * Description:    
+ * Description:    Checks the elapsed time since the last frame draw for this animation is longer
+ *                 than the fps target
  *
  * Parameters:     
  *

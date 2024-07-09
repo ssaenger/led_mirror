@@ -25,6 +25,9 @@ SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(backgroundLayer, SM_WIDTH, SM_HEIGHT, SM_C
 SMARTMATRIX_ALLOCATE_GFX_MONO_LAYER(scrollingLayer, SM_WIDTH, SM_HEIGHT, SM_WIDTH * 2, SM_HEIGHT, SM_COLOR_DEPTH, kScrollingLayerOptions);
 AniType aniTypeArray[SM_NUM_LEDS];
 
+HSVHue hueArr[8] = {HUE_RED, HUE_ORANGE, HUE_YELLOW,
+                    HUE_GREEN, HUE_AQUA, HUE_BLUE,
+                    HUE_PURPLE, HUE_PINK};
 
 /* --------------------------------------------------------------------------------------------
  *                 MtxMgr()
@@ -42,7 +45,7 @@ MtxMgr::MtxMgr()
     pix.green = 0x00;
     pix.blue = 0x00;
     
-
+    // just showing different ways
     // backgroundLayer.fillScreen(rgb24(0xff, 0xff, 0xff));
     // backgroundLayer.fillScreen(SM_RGB(0xff, 0xff, 0xff));
     // backgroundLayer.fillScreen(CRGB(CHSV(0xff, 0xff, 0xff)));
@@ -92,7 +95,6 @@ MtxMgr& MtxMgr::getInstance()
  */
 bool MtxMgr::syncInit()
 {
-
     ANI_Init(aniTypeArray);
     AS_Init();
     if (!GIFDEC_Init()) {
@@ -116,6 +118,7 @@ bool MtxMgr::syncInit()
     //memset((void *)aniI.owners, ANI_TYPE_FREE, sizeof(aniI.owners));
     ANI_Init(aniTypeArray);
 
+    // TODO move all below to a compendinum file. Split 
     InitNode(&aniPackArray[0].node);
     aniPackArray[0].funcp = ANIFUNC_Confetti;
     aniPackArray[0].type = ANI_TYPE_FOREGROUND;
@@ -187,10 +190,13 @@ bool MtxMgr::syncInit()
     aniPackArray[6].funcp = AS_PlotFftMid;
     aniPackArray[6].type = ANI_TYPE_FOREGROUND;
     aniPackArray[6].parms.hue = HUE_RED;
-    aniPackArray[6].parms.speed = 0;
-    aniPackArray[6].parms.maxBright = 100;
-    aniPackArray[6].parms.aff = ANI_EFFECT_3;
-    aniPackArray[6].parms.fpsTarg = matrix.getRefreshRate();
+    aniPackArray[6].parms.speed = 4;
+    aniPackArray[6].parms.scale = 20;
+    aniPackArray[6].parms.offset = 0;
+    aniPackArray[6].parms.counter = 0;
+    aniPackArray[6].parms.maxBright = 200;
+    aniPackArray[6].parms.aff = ANI_EFFECT_3 | ANI_EFFECT_2 | ANI_EFFECT_1;
+    aniPackArray[6].parms.fpsTarg = 100;
     aniPackArray[6].parms.type = 0;
 
     InitNode(&aniPackArray[7].node);
@@ -232,7 +238,7 @@ bool MtxMgr::syncInit()
     ANI_AddAnimation(&aniPackArray[9], aniPackArray[9].type);
 
     //ANI_QueueAnimation(&aniPackArray[3]);
-    ANI_QueueAnimation(&aniPackArray[4]);
+    ANI_QueueAnimation(&aniPackArray[6]);
     ANI_SwapAnimation();
 
     Serial.println(matrix.getRefreshRate());
@@ -251,6 +257,8 @@ bool MtxMgr::syncInit()
 void MtxMgr::run()
 {
     static int val = 0;
+    static int indx = 0;
+    static uint16_t pixCount = 0;
 #if 0
     while(backgroundLayer.isSwapPending());
     ledBuff = backgroundLayer.backBuffer();
@@ -282,25 +290,42 @@ void MtxMgr::run()
     while(backgroundLayer.isSwapPending());
     ledBuff = backgroundLayer.getRealBackBuffer();
 
-    if (ANI_DrawAnimationFrame(ledBuff) != 0) {
+    if ((pixCount = ANI_DrawAnimationFrame(ledBuff)) != 0) {
         //Serial.println("Swapping");
         //rgb24 rgbcolor = ledBuff[60];
         //Serial.printf("g=%d\r\n", rgbcolor.green);
-        backgroundLayer.swapBuffers(true);
+        if (pixCount == SM_NUM_LEDS) {
+            /* All pixels were drawn. Assume this means that the next
+             * will be filled as well
+             */
+            backgroundLayer.swapBuffers(false);
+        } else {
+            /* Copy the current frame to the next frame */
+            backgroundLayer.swapBuffers(true);
+        }
         matrix.countFPS();      // print the loop() frames per second to Serial
     }
 #if 1
     EVERY_N_SECONDS(7) {
         val = (val + 1) % 2;
-        Serial.printf("Swapping!! %d\n\r", val);
+        indx = (indx + 1) % 8;
+        aniPackArray[6].parms.hue = hueArr[indx];
+        aniPackArray[6].parms.offset = (aniPackArray[6].parms.offset + 1) % 3;
+        Serial.printf("Swapping!! indx = %d\n\r", indx);
         if (val == 1) {
-            ANI_QueueAnimation(&aniPackArray[9]);
-            //aniPackArray[5].parms.aff &= ~ANI_EFFECT_3;
+            //ANI_QueueAnimation(&aniPackArray[9]);
+            aniPackArray[6].parms.aff &= ~(ANI_EFFECT_3 | ANI_EFFECT_2 | ANI_EFFECT_1);
         } else if (val == 0) {
-            ANI_QueueAnimation(&aniPackArray[4]);
-            //aniPackArray[5].parms.aff |= ANI_EFFECT_3;
+            //ANI_QueueAnimation(&aniPackArray[4]);
+            aniPackArray[6].parms.aff |= (ANI_EFFECT_3 | ANI_EFFECT_2 | ANI_EFFECT_1);
         }
-        ANI_SwapAnimation();
+        if (aniPackArray[6].parms.offset == 0) {
+            /* If offset wraps back down to 0, then animation could miss erasing 
+             * pixels that are high up, so just erase the screen
+             */
+            backgroundLayer.fillScreen(0);
+        }
+        //ANI_SwapAnimation();
     }
 #endif
 #endif

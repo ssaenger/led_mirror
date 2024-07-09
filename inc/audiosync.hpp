@@ -86,7 +86,6 @@ void AS_CalcLevelThresh(float MaxLevel, float DynamicRange, float LinearBlend);
 
 void AS_PlotFftTop(AniParms *Ap, AniType At);
 void AS_PlotFftBottom(AniParms *Ap, AniType At);
-void AS_PlotFftMidSpace(AniParms *Ap, AniType At);
 void AS_PlotFftMid(AniParms *Ap, AniType At);
 
 #endif /* _AUDIOSYNC_HPP_ */

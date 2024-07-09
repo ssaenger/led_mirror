@@ -272,9 +272,8 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
 void AS_PlotFftBottom(AniParms *Ap, AniType At)
 {
     float level;
-    int16_t x, y;
+    int16_t x, y, i;
     uint16_t prevFreqBin;
-    uint8_t i;
 
     CHSV hsv;
     CRGB crgb;
@@ -293,17 +292,17 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
+            if (Ap->aff & ANI_EFFECT_3) {
+                /* Overide max level if previous value was greater */
+                level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
+            }
+
             if (Ap->aff & ANI_EFFECT_2) {
                 hsv.hue = Ap->hue + x;
-                crgb = hsv;
             } else {
-                if (Ap->aff & ANI_EFFECT_3) {
-                    /* Overide max level if previous value was greater */
-                    level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
-                }
                 hsv.hue = Ap->hue;
-                crgb = hsv;
             }
+            crgb = hsv;
             /* First row is always written */
             writePixel(Ap, At, pXY_BL(x, 0), crgb);
             for (y = 1; y < SM_HEIGHT; y++) {
@@ -312,9 +311,6 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
                     if (Ap->aff & ANI_EFFECT_1) {
                         hsv.hue = Ap->hue + y;
                         crgb = hsv;
-                    }
-                    if (x == 0) {
-                        //Serial.printf("writing to y = %d\n\r", y);
                     }
                     writePixel(Ap, At, pXY_BL(x, y), crgb);
                 } else {
@@ -334,61 +330,9 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
 }
 
 /* --------------------------------------------------------------------------------------------
- *                 AS_PlotFftMidSpace()
- * --------------------------------------------------------------------------------------------
- * Description:
- *
- * Parameters:
- *
- * Returns:
- */
-void AS_PlotFftMidSpace(AniParms *Ap, AniType At)
-{
-    float level;
-    int16_t x, y;
-    uint16_t prevFreqBin;
-
-    CHSV hsv;
-    CRGB crgb;
-    const CRGB crgbBlack = CRGB::Black;
-
-    hsv.hue = Ap->hue;
-    hsv.val = 255;
-    hsv.sat = 240;
-    crgb    = hsv;
-    Ap->hue += Ap->speed;
-
-    if (fft1024.available()) {
-
-        prevFreqBin = 0;
-        for (x = 0; x < SM_WIDTH; x++) {
-            //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
-            level = fft1024.read(prevFreqBin, fftBins[x]);
-            for (y = 1; y < SM_HEIGHT / 2 - 1; y++) {
-
-                if (level >= levelThreshVert[y * 2 + 1]) {
-                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2 + 1), crgb);
-                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2 + 1), crgb);
-                } else {
-                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2 + 1), crgbBlack);
-                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2 + 1), crgbBlack);
-                }
-            }
-            // fix always on LEDs
-            writePixel(Ap, At, pXY(x, SM_HEIGHT / 2), crgb);
-            writePixel(Ap, At, pXY_BL(x, SM_HEIGHT / 2), crgb);
-            prevFreqBin = fftBins[x] + 1;
-
-        }
-    } else {
-        writePixel(Ap, At, pXY_BL(Ap->hue % SM_WIDTH, SM_HEIGHT - 1), crgb);
-    }
-}
-
-/* --------------------------------------------------------------------------------------------
  *                 AS_PlotFftMid()
  * --------------------------------------------------------------------------------------------
- * Description:
+ * Description:    Plays the bins starting from the middle of the screen
  *
  * Parameters:
  *
@@ -397,56 +341,73 @@ void AS_PlotFftMidSpace(AniParms *Ap, AniType At)
 void AS_PlotFftMid(AniParms *Ap, AniType At)
 {
     float level;
-    int16_t x, y;
+    int16_t x, y, i;
     uint16_t prevFreqBin;
-    uint8_t yMax;
+    uint16_t offset, speed;
 
-    CHSV hsv;
+    CHSV hsvX;
+    CHSV hsvY;
     CRGB crgb;
     const CRGB crgbBlack = CRGB::Black;
 
-    hsv.hue = Ap->hue;
-    hsv.val = 255;
-    hsv.sat = Ap->maxBright;
-    crgb = hsv;
+    // Roughly Ap->hue goes up by 1 every Ap->scale per second
+    Ap->counter = (Ap->counter >= Ap->fpsTarg) ? 0 : Ap->counter + Ap->scale;
+    if (Ap->counter == 0) {
+        Ap->hue += 1;
+        Serial.printf("Changing hue val to %d\n\r", Ap->hue);
+    }
+    speed = Ap->speed;
+    offset = Ap->offset;
+    hsvX.hue = Ap->hue;
+    hsvX.val = Ap->maxBright;
+    hsvX.sat = 0xFF;
+    hsvY = hsvX;
+    crgb = hsvX;
 
     if (fft1024.available()) {
-        Ap->hue += Ap->speed;
 
         prevFreqBin = 0;
         for (x = 0; x < SM_WIDTH; x++) {
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
-            yMax = 1;
 
-            // fix always on LEDs
+            if (Ap->aff & ANI_EFFECT_3) {
+                /* Overide max level if previous value was greater */
+                level = max(levelThreshVert[((shownBinLevel[x] >= 2) ? ((shownBinLevel[x] - 2) * 2) : 0)], level);
+            }
+
+            if (Ap->aff & ANI_EFFECT_2) {
+                hsvX.hue = Ap->hue + (x * speed);
+            }
+            crgb = hsvX;
+
+            // Mid 2 rows are always on
             writePixel(Ap, At, pXY(x, SM_HEIGHT / 2), crgb);
             writePixel(Ap, At, pXY_BL(x, SM_HEIGHT / 2), crgb);
-            for (y = 1; y < SM_HEIGHT / 2; y++) {
+            for (y = 1; (y < (offset + 1)) && (y < SM_HEIGHT / 2) ; y++) {
+                writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2), crgbBlack);
+                writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2), crgbBlack);
+            }
+            for (y = 1; y < SM_HEIGHT / 2 - offset; y++) {
 
-                if (level >= levelThreshVert[y * 2] || y <= shownBinLevel[x]) {
-                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2), crgb);
-                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2), crgb);
-                    yMax = y;
+                if (level >= levelThreshVert[y * 2 + offset]) {
+                    if (Ap->aff & ANI_EFFECT_1) {
+                        hsvY.hue = hsvX.hue + ((y * 2) * speed);
+                    }
+                    crgb = hsvY;
+
+                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2 + offset), crgb);
+                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2 + offset), crgb);
                 } else {
-                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2), crgbBlack);
-                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2), crgbBlack);
+                    for (i = y; i <= shownBinLevel[x]; i++) {
+                        writePixel(Ap, At, pXY(x, i + SM_HEIGHT / 2 + offset), crgbBlack);
+                        writePixel(Ap, At, pXY_BL(x, i + SM_HEIGHT / 2 + offset), crgbBlack);
+                    }
                     break;
                 }
             }
             prevFreqBin = fftBins[x] + 1;
-            shownBinLevel[x] = (Ap->aff & ANI_EFFECT_3) ? yMax - 1 : 0;
-
-        }
-    } else {
-        writePixel(Ap, At, pXY_BL(Ap->hue % SM_WIDTH, SM_HEIGHT - 1), crgb);
-        if (Ap->aff & ANI_EFFECT_3) {
-            /* No FFT data, but lower the bin levels for that subtle fall affect. */
-            for (x = 0; x < SM_WIDTH; x++) {
-                writePixel(Ap, At, pXY(x, shownBinLevel[x] + SM_HEIGHT / 2 + 1), crgbBlack);
-                writePixel(Ap, At, pXY_BL(x, shownBinLevel[x] + SM_HEIGHT / 2 + 1), crgbBlack);
-                shownBinLevel[x] = shownBinLevel[x] > 0 ? shownBinLevel[x] - 1 : shownBinLevel[x];
-            }
+            shownBinLevel[x] = ((y > 1) ? y - 1 : 0);
         }
     }
 }

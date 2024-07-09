@@ -226,6 +226,8 @@ typedef struct _AniParms {
     /* Speed value */
     uint16_t speed;
 
+    uint16_t offset;
+
     /* Scale. Used for certain animations */
     uint16_t scale;
 
@@ -278,6 +280,7 @@ typedef struct _AniParms {
 
     /* ~~~~ Internal Only fields ~~~~*/
     uint32_t startTime;
+    /* Used to determine how long of a gap is needed before playing this animation */
     uint32_t delay;
     uint16_t last;
     uint8_t  value;
