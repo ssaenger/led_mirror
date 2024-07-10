@@ -129,7 +129,7 @@ bool MtxMgr::syncInit()
 
     InitNode(&aniPackArray[1].node);
     aniPackArray[1].funcp = ANIFUNC_PlazInt;
-    aniPackArray[1].type = ANI_TYPE_FOREGROUND;
+    aniPackArray[1].type = ANI_TYPE_BACKGROUND;
     aniPackArray[1].parms.counter = 100;
     aniPackArray[1].parms.fpsTarg = 60;
     aniPackArray[1].parms.type = 0;
@@ -177,11 +177,11 @@ bool MtxMgr::syncInit()
     aniPackArray[4].parms.mod = ANI_MOD_1;
 
     InitNode(&aniPackArray[5].node);
-    aniPackArray[5].funcp = AS_PlotFftTop;
-    aniPackArray[5].type = ANI_TYPE_FOREGROUND;
+    aniPackArray[5].funcp = AS_PlotFftBottom;
+    aniPackArray[5].type = ANI_TYPE_SPECIAL_1;
     aniPackArray[5].parms.hue = HUE_PURPLE;
     aniPackArray[5].parms.speed = 0;
-    aniPackArray[5].parms.maxBright = 200;
+    aniPackArray[5].parms.maxBright = 0; /* White*/
     aniPackArray[5].parms.mod = ANI_MOD_3;
     aniPackArray[5].parms.fpsTarg = 100;
     aniPackArray[5].parms.type = 0;
@@ -238,7 +238,8 @@ bool MtxMgr::syncInit()
     ANI_AddAnimation(&aniPackArray[9], aniPackArray[9].type);
 
     //ANI_QueueAnimation(&aniPackArray[3]);
-    ANI_QueueAnimation(&aniPackArray[6]);
+    ANI_QueueAnimation(&aniPackArray[1]);
+    ANI_QueueAnimation(&aniPackArray[5]);
     ANI_SwapAnimation();
 
     Serial.println(matrix.getRefreshRate());
@@ -294,7 +295,7 @@ void MtxMgr::run()
         //Serial.println("Swapping");
         //rgb24 rgbcolor = ledBuff[60];
         //Serial.printf("g=%d\r\n", rgbcolor.green);
-        if (pixCount == SM_NUM_LEDS) {
+        if (pixCount >= SM_NUM_LEDS) {
             /* All pixels were drawn. Assume this means that the next
              * will be filled as well
              */
@@ -305,7 +306,7 @@ void MtxMgr::run()
         }
         matrix.countFPS();      // print the loop() frames per second to Serial
     }
-#if 1
+#if 0
     EVERY_N_SECONDS(7) {
         val = (val + 1) % 2;
         indx = (indx + 1) % 8;

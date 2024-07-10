@@ -90,7 +90,7 @@ bool ANI_AddAnimation(AniPack *Ap, AniType At)
         return false;
     }
 
-    if (At & ANI_TYPE_MAIN_OFFSET) {
+    if (At & (ANI_TYPE_MAIN_OFFSET | ANI_TYPE_SPECIAL_1)) {
         /* Place this in the waiting main list */
         //Serial.printf("list addr: %p, F->%p, B->%p, node addr %p, F->%p, B->%p",
         //              &aniInfo.mainWaitList, aniInfo.mainWaitList.linkF, aniInfo.mainWaitList.linkB,
@@ -142,7 +142,7 @@ void ANI_RemoveAnimation(AniPack *Ap)
  */
 bool ANI_QueueAnimation(AniPack *Ap)
 {
-    if ((Ap->type & ANI_TYPE_MAIN_OFFSET) && IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
+    if ((Ap->type & (ANI_TYPE_MAIN_OFFSET | ANI_TYPE_SPECIAL_1)) && IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
         RemoveNode(&Ap->node);
         aniInfo.numMainWaiting--;
     } else if ((Ap->type & ANI_TYPE_TRANS_OFFSET) && IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) {
@@ -330,10 +330,11 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
                 aniPack = aniPack2;
                 tCount--;
             }
-
             break;
 
-        
+        default:
+            aniPack->funcp(&aniPack->parms, aniPack->type);
+            break;
         }
     }
 
@@ -749,6 +750,17 @@ void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, const rgb24 &RgbVal)
             goto skip;
         }
         break;
+
+    case ANI_TYPE_SPECIAL_1:
+        if ((RgbVal.blue == 0) &&
+            (RgbVal.green == 0) &&
+            (RgbVal.red == 0)) {
+            aniInfo.owners[PixNum] = ANI_TYPE_FREE;
+            goto skip;
+        } else {
+            aniInfo.owners[PixNum] = ANI_TYPE_SPECIAL_1;
+            goto write;
+        }
 
     default:
         if (pixOwner & At) {
