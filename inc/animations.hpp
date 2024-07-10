@@ -33,7 +33,7 @@ typedef struct _AniPack AniPack;
 /* --------------------------------------------------------------------------------------------
  * pXY macro
  *
- * Calculates the pixel number from a x,y coordinates
+ * Calculates the pixel number from a x,y coordinates. Origin is top left.
  * 
  */
 #define pXY(x, y)  (SM_WIDTH) * (y) + (x)
@@ -184,29 +184,29 @@ typedef uint16_t AniType;
 /* End AniType type */
 
 /* --------------------------------------------------------------------------------------------
- * AniEffect type
+ * AniMod type
  *
- * Bitmask of different effects to apply to an animation. Each animation will describe what
- * each value means
+ * Bitmask of different modifications/effects to apply to an animation. Each animation
+ * will describe what each value does in the function description.
  */
-typedef uint8_t AniEffect;
+typedef uint8_t AniMod;
 
 /* Apply no special affects to the animation */
-#define ANI_EFFECT_NONE          0x00
+#define ANI_MOD_NONE             0x00
 
-/* Apply special effect 1 */
-#define ANI_EFFECT_1             0x01
+/* Apply modification 1 */
+#define ANI_MOD_1                0x01
 
-/* Apply special effect 2 */
-#define ANI_EFFECT_2             0x02
+/* Apply modification 2 */
+#define ANI_MOD_2             0x02
 
-/* Apply special effect 3 */
-#define ANI_EFFECT_3             0x04
+/* Apply modification 3 */
+#define ANI_MOD_3             0x04
 
-/* Apply special effect 4 */
-#define ANI_EFFECT_4             0x08
+/* Apply modification 4 */
+#define ANI_MOD_4             0x08
 
-/* End AniEffect type */
+/* End AniMod type */
 
 
 /* --------------------------------------------------------------------------------------------
@@ -242,7 +242,7 @@ typedef struct _AniParms {
 
     AniType type;
 
-    AniEffect aff;
+    AniMod mod;
 
     uint16_t x0;
     uint16_t y0;

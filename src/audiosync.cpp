@@ -208,11 +208,11 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
-            if (Ap->aff & ANI_EFFECT_2) {
+            if (Ap->mod & ANI_MOD_2) {
                 hsv.hue = Ap->hue + x;
                 crgb = hsv;
             } else {
-                if (Ap->aff & ANI_EFFECT_3) {
+                if (Ap->mod & ANI_MOD_3) {
                     /* Overide max level if previous value was greater */
                     level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
                 }
@@ -224,7 +224,7 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
             for (y = 1; y < SM_HEIGHT; y++) {
 
                 if (level >= levelThreshVert[y]) {
-                    if (Ap->aff & ANI_EFFECT_1) {
+                    if (Ap->mod & ANI_MOD_1) {
                         hsv.hue = Ap->hue + y;
                         crgb = hsv;
                     }
@@ -256,13 +256,13 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
  *
  * Parameters:  Ap - Pointer to AniParms data where:
  *                   hue: specifies hue color (rgb color from the color wheel)
- *                   aff: ANI_EFFECT_1 - increase hue color along y-axis Can't be used with 2
- *                        ANI_EFFECT_2 - increase hue color along x-axis. Can't be used with 1.
- *                        ANI_EFFECT_3 - subtly apply a "fall" affect to each bin. This means
- *                                       instead of just removing a drawn bar in a bin when
- *                                       the fft data doesn't meet a certian threshold, the drawn
- *                                       bar will decrease in size until it goes to 0 or until
- *                                       fft data exceeds the size of the drawn bar.
+ *                   aff: ANI_MOD_1 - increase hue color along y-axis Can't be used with 2
+ *                        ANI_MOD_2 - increase hue color along x-axis. Can't be used with 1.
+ *                        ANI_MOD_3 - subtly apply a "fall" affect to each bin. This means
+ *                                    instead of just removing a drawn bar in a bin when
+ *                                    the fft data doesn't meet a certian threshold, the drawn
+ *                                    bar will decrease in size until it goes to 0 or until
+ *                                    fft data exceeds the size of the drawn bar.
  *                   maxBright: brightness of each drawn bar
  *                   speed: speed the hue color cycles. 0 means static hue color
  *              At - Type of animation (Recommendation: ANI_TYPE_FOREGROUND)
@@ -292,12 +292,12 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
-            if (Ap->aff & ANI_EFFECT_3) {
+            if (Ap->mod & ANI_MOD_3) {
                 /* Overide max level if previous value was greater */
                 level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
             }
 
-            if (Ap->aff & ANI_EFFECT_2) {
+            if (Ap->mod & ANI_MOD_2) {
                 hsv.hue = Ap->hue + x;
             } else {
                 hsv.hue = Ap->hue;
@@ -308,7 +308,7 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
             for (y = 1; y < SM_HEIGHT; y++) {
 
                 if (level >= levelThreshVert[y]) {
-                    if (Ap->aff & ANI_EFFECT_1) {
+                    if (Ap->mod & ANI_MOD_1) {
                         hsv.hue = Ap->hue + y;
                         crgb = hsv;
                     }
@@ -332,11 +332,28 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
 /* --------------------------------------------------------------------------------------------
  *                 AS_PlotFftMid()
  * --------------------------------------------------------------------------------------------
- * Description:    Plays the bins starting from the middle of the screen
+ * Description: Reads FFT data from an audio stream and displays the frequencies shooting
+ *              from the center vertically, up and down
  *
- * Parameters:
+ * Parameters:  Ap - Pointer to AniParms data where:
+ *                   hue: specifies hue color (rgb color from the color wheel)
+ *                   speed: Combined with ANI_MOD_1 and ANI_MOD_2. Determines how
+ *                          much the color changes along the x and y-axis.
+ *                   scale: A higher scale means a change in color over time. This is done
+ *                          by increasing the hue value. This leads to a changing rainbow
+ *                          effect. Set to 0 to keep hue the same.
+ *                   counter: Internal counter. Set to 1. Used with scale.
+ *                   maxBright: brightness of each drawn bar
+ *                   aff: ANI_MOD_1 - increase hue color along y-axis
+ *                        ANI_MOD_2 - increase hue color along x-axis.
+ *                        ANI_MOD_3 - subtly apply a "fall" affect to each bin. This means
+ *                                    instead of just removing a drawn bar in a bin when
+ *                                    the fft data doesn't meet a certian threshold, the drawn
+ *                                    bar will decrease in size until it goes to 0 or until
+ *                                    fft data exceeds the size of the drawn bar.
+ *              At - Type of animation (Recommendation: ANI_TYPE_FOREGROUND)
  *
- * Returns:
+ * Returns:     void
  */
 void AS_PlotFftMid(AniParms *Ap, AniType At)
 {
@@ -354,7 +371,6 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
     Ap->counter = (Ap->counter >= Ap->fpsTarg) ? 0 : Ap->counter + Ap->scale;
     if (Ap->counter == 0) {
         Ap->hue += 1;
-        Serial.printf("Changing hue val to %d\n\r", Ap->hue);
     }
     speed = Ap->speed;
     offset = Ap->offset;
@@ -371,12 +387,12 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
-            if (Ap->aff & ANI_EFFECT_3) {
+            if (Ap->mod & ANI_MOD_3) {
                 /* Overide max level if previous value was greater */
                 level = max(levelThreshVert[((shownBinLevel[x] >= 2) ? ((shownBinLevel[x] - 2) * 2) : 0)], level);
             }
 
-            if (Ap->aff & ANI_EFFECT_2) {
+            if (Ap->mod & ANI_MOD_2) {
                 hsvX.hue = Ap->hue + (x * speed);
             }
             crgb = hsvX;
@@ -391,7 +407,7 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
             for (y = 1; y < SM_HEIGHT / 2 - offset; y++) {
 
                 if (level >= levelThreshVert[y * 2 + offset]) {
-                    if (Ap->aff & ANI_EFFECT_1) {
+                    if (Ap->mod & ANI_MOD_1) {
                         hsvY.hue = hsvX.hue + ((y * 2) * speed);
                     }
                     crgb = hsvY;

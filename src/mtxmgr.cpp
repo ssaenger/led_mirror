@@ -171,10 +171,10 @@ bool MtxMgr::syncInit()
     aniPackArray[4].parms.hue = HUE_GREEN;
     aniPackArray[4].parms.speed = 0;
     aniPackArray[4].parms.maxBright = 200;
-    aniPackArray[4].parms.aff = 0;
+    aniPackArray[4].parms.mod = 0;
     aniPackArray[4].parms.fpsTarg = 100; /* No use going higher. Data won't be available */
     aniPackArray[4].parms.type = 0;
-    aniPackArray[4].parms.aff = ANI_EFFECT_1;
+    aniPackArray[4].parms.mod = ANI_MOD_1;
 
     InitNode(&aniPackArray[5].node);
     aniPackArray[5].funcp = AS_PlotFftTop;
@@ -182,7 +182,7 @@ bool MtxMgr::syncInit()
     aniPackArray[5].parms.hue = HUE_PURPLE;
     aniPackArray[5].parms.speed = 0;
     aniPackArray[5].parms.maxBright = 200;
-    aniPackArray[5].parms.aff = ANI_EFFECT_3;
+    aniPackArray[5].parms.mod = ANI_MOD_3;
     aniPackArray[5].parms.fpsTarg = 100;
     aniPackArray[5].parms.type = 0;
 
@@ -195,7 +195,7 @@ bool MtxMgr::syncInit()
     aniPackArray[6].parms.offset = 0;
     aniPackArray[6].parms.counter = 0;
     aniPackArray[6].parms.maxBright = 200;
-    aniPackArray[6].parms.aff = ANI_EFFECT_3 | ANI_EFFECT_2 | ANI_EFFECT_1;
+    aniPackArray[6].parms.mod = ANI_MOD_3 | ANI_MOD_2 | ANI_MOD_1;
     aniPackArray[6].parms.fpsTarg = 100;
     aniPackArray[6].parms.type = 0;
 
@@ -221,10 +221,10 @@ bool MtxMgr::syncInit()
     aniPackArray[9].parms.hue = HUE_GREEN;
     aniPackArray[9].parms.speed = 0;
     aniPackArray[9].parms.maxBright = 200;
-    aniPackArray[9].parms.aff = 0;
+    aniPackArray[9].parms.mod = 0;
     aniPackArray[9].parms.fpsTarg = 100; /* No use going higher. Data won't be available */
     aniPackArray[9].parms.type = 0;
-    aniPackArray[9].parms.aff = ANI_EFFECT_2;
+    aniPackArray[9].parms.mod = ANI_MOD_2;
 
     ANI_AddAnimation(&aniPackArray[0], ANI_TYPE_FOREGROUND);
     ANI_AddAnimation(&aniPackArray[1], ANI_TYPE_FOREGROUND);
@@ -314,10 +314,10 @@ void MtxMgr::run()
         Serial.printf("Swapping!! indx = %d\n\r", indx);
         if (val == 1) {
             //ANI_QueueAnimation(&aniPackArray[9]);
-            aniPackArray[6].parms.aff &= ~(ANI_EFFECT_3 | ANI_EFFECT_2 | ANI_EFFECT_1);
+            aniPackArray[6].parms.mod &= ~(ANI_MOD_3 | ANI_MOD_2 | ANI_MOD_1);
         } else if (val == 0) {
             //ANI_QueueAnimation(&aniPackArray[4]);
-            aniPackArray[6].parms.aff |= (ANI_EFFECT_3 | ANI_EFFECT_2 | ANI_EFFECT_1);
+            aniPackArray[6].parms.mod |= (ANI_MOD_3 | ANI_MOD_2 | ANI_MOD_1);
         }
         if (aniPackArray[6].parms.offset == 0) {
             /* If offset wraps back down to 0, then animation could miss erasing 

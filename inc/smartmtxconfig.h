@@ -101,6 +101,14 @@
  *  CONST
  * --------------------------------------------------------------------------------------------
  */
+
+/* --------------------------------------------------------------------------------------------
+ * SM_NUM_LEDS define
+ *
+ * Defines the total number of pixels. It is the product of the number of pixels in x and y
+ * direction. For example, if SM_WIDTH is 128 and SM_HEIGHT is 96, the total number of pixels
+ * is 12,288.
+ */
 #define SM_NUM_LEDS                    (SM_WIDTH * SM_HEIGHT)
 
 // SMARTMATRIX_HUB75_32ROW_MOD16SCAN for matrix wall, SMARTMATRIX_HUB75_64ROW_MOD32SCAN for cube
