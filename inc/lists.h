@@ -112,9 +112,29 @@ struct _ListNode {
                                     InitNode(node)
 
 /* --------------------------------------------------------------------------------------------
+ * MoveNodeAfter macro
+ *
+ * Move a node from one list to another. Insert node after "list"
+ *
+ */
+#define MoveNodeAfter(list, node)   (node)->linkB->linkF = (node)->linkF;  \
+                                    (node)->linkF->linkB = (node)->linkB;  \
+                                    InsertAfter(list, node)
+
+/* --------------------------------------------------------------------------------------------
+ * MoveNodeBefore macro
+ *
+ * Move a node from one list to another. Insert node before "list"
+ *
+ */
+#define MoveNodeBefore(list, node)    (node)->linkB->linkF = (node)->linkF;  \
+                                      (node)->linkF->linkB = (node)->linkB;  \
+                                      InsertBefore(list, node)
+
+/* --------------------------------------------------------------------------------------------
  * GetNextNode macro
  *
- * Get the next node on the list. Don't remove it.
+ * Get the next node on the list. Doesn't remove it.
  *
  */
 #define GetNextNode(node)           (node)->linkF
@@ -122,7 +142,7 @@ struct _ListNode {
 /* --------------------------------------------------------------------------------------------
  * GetPriorNode macro
  *
- * Get the prior node on the list. Don't remove it.
+ * Get the prior node on the list. Doesn't remove it.
  *
  */
 #define GetPriorNode(node)           (node)->linkB
@@ -130,7 +150,7 @@ struct _ListNode {
 /* --------------------------------------------------------------------------------------------
  * GetHead macro
  *
- * Get the first node of a list. Don't remove it.
+ * Get the first node of a list. Doesn't remove it.
  *
  */
 #define GetHead(list)               GetNextNode(list)
@@ -154,6 +174,19 @@ struct _ListNode {
 #define IterateList(list, curr, type)  for ((curr) = (type) GetHead(&list) ;        \
                                             (curr) != (type)&(list);                \
                                             (curr) = (type)GetNextNode(&(curr)->node))
+
+/* --------------------------------------------------------------------------------------------
+ * IterateListSafely macro
+ *
+ * A for loop to iterate through all the nodes of the list. The nodes can be removed
+ * while iterating through the list. Use brackets {} at the end of this macro and the
+ * contents inside the brackets is what will be executed in each iteration through the list.
+ *
+ */
+#define IterateListSafely(list, curr, next, type)  for ((curr) = (type) GetHead(&list) ;        \
+                                                   (next) = (type)GetNextNode(&(curr)->node),   \
+                                                   (curr) != (type)(&list) ;                    \
+                                                   (curr) = (next))
 
 /* --------------------------------------------------------------------------------------------
  *  PUBLIC FUNCTIONS

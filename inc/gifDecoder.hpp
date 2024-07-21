@@ -54,4 +54,4 @@
 
 bool GIFDEC_Init();
 
-void GIFDEC_Play(AniParms *Ap, AniType At);
+void GIFDEC_Play(AniParms *Ap);

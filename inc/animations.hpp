@@ -36,7 +36,7 @@ typedef struct _AniPack AniPack;
  * Calculates the pixel number from a x,y coordinates. Origin is top left.
  * 
  */
-#define pXY(x, y)  (SM_WIDTH) * (y) + (x)
+#define pXY(x, y)  (LEDI_WIDTH) * (y) + (x)
 
 /* --------------------------------------------------------------------------------------------
  * pXY_BtoT macro
@@ -44,11 +44,7 @@ typedef struct _AniPack AniPack;
  * Calculates the pixel number from a x,y coordinates from Bottom Left 2 Top Right
  *
  */
-#define pXY_BL(x, y)  SM_WIDTH * (SM_HEIGHT - 1) + (x) - ((y) * SM_WIDTH)
-
-// #define SM_HEIGHT 64
-// #define SM_WIDTH 128
-// NUM LED          8,192
+#define pXY_BL(x, y)  LEDI_WIDTH * (LEDI_HEIGHT - 1) + (x) - ((y) * LEDI_WIDTH)
 
 /* --------------------------------------------------------------------------------------------
  * fps2Ms macro
@@ -70,7 +66,7 @@ typedef struct _AniPack AniPack;
  * 
  */
 #ifndef LED_TYPE
-#define LED_TYPE rgb24*
+#define LED_TYPE rgb24
 #endif /* LED_TYPE */
 
 /* --------------------------------------------------------------------------------------------
@@ -79,135 +75,129 @@ typedef struct _AniPack AniPack;
  */
 
 /* --------------------------------------------------------------------------------------------
- * AniType type
+ * AniTags type
  *
- * Ties an animation to a type. Animation types values are ordered by their draw order.
- * There are a few rules to these types and their assignment.
- *      1. An animation function assigned the type ANI_TYPE_INACTIVE means that func is just skipped.
- *      2. The three main animation types are ANI_TYPE_MASK, ANI_TYPE_FOREGROUND, and ANI_TYPE_BACKGROUND
- *      3. Once a function is assigned either ANI_TYPE_TRANS_SWIPE or ANI_TYPE_TRANS_TO_FREE,
- *         types ANI_TYPE_FOREGROUND/ANI_TYPE_BACKGROUND are assigned
- *         types ANI_TYPE_TRANS_BEFORE_FOREGROUND/ANI_TYPE_TRANS_BEFORE_BACKGROUND.
- *      4. Transition type animation functions will become ANI_TYPE_FREE during the current
- *         frame or right after
- *      5. ANI_TYPE_FOREGROUND and ANI_TYPE_BACKGROUND cannot overwrite either
- *         ANI_TYPE_TRANS_BEFORE_FOREGROUND or ANI_TYPE_TRANS_BEFORE_BACKGROUND
+ * Specifies the general tags attached to an animation. Multiple tags can be included by
+ * bitwise ORing together.
+ */
+typedef uint16_t AniTags;
+
+/* Animation tag is unknown or unspecified. Should not be ORd with other tag values */
+#define ANI_TAG_UNSPECIFIED                0x0000
+
+/* Animation is audio reactive */
+#define ANI_TAG_AUDIO_REACTIVE             0x0001
+
+/* Animation plays a gif file on the SD card */
+#define ANI_TAG_GIF                        0x0002
+
+/* Animation remembers previously worked on LEDs and keeps track of them using a list */
+#define ANI_TAG_REMEMBRANCE                0x0004
+
+/* Animation displays text */
+#define ANI_TAG_GRID_TEXTUAL               0x0008
+
+/* Animation uses a mask and only writes to those pixels */
+#define ANI_TAG_MASK                       0x0010
+
+/* Animation is purely aesthetic to view */
+#define ANI_TAG_VISUAL                     0x0100
+
+/* Animation is can be be used for transitioning a new animation while phasing out
+ * the previous animation(s).
+ */
+#define ANI_TAG_TRANSITION                 0x0200
+
+/* Animation looks best for LED panels layed out in a grid */
+#define ANI_TAG_GRID_OPTIMIZED             0x0400
+
+/* Macro to identify an animation intended for audio analysis only only */
+#define ANI_TAG_IS_AUDIO_ANALYSIS(t)      (((t) & (ANI_TAG_AUDIO_REACTIVE | ANI_TAG_VISUAL)) == \
+                                            ANI_TAG_AUDIO_REACTIVE)
+
+/* Macro to identify an animation intended for transitioning only */
+#define ANI_TAG_IS_TRANSITION_ONLY(t)      (((t) & (ANI_TAG_TRANSITION | ANI_TAG_VISUAL)) == \
+                                            ANI_TAG_TRANSITION)
+/* End AniTags type */
+
+/* --------------------------------------------------------------------------------------------
+ * AniLayer type
  *
- * Generally the lifecylce of animation functions are:
- *                        ANI_TYPE_FOREGROUND/ANI_TYPE_BACKGROUND
- *                                           |
- *                                           v
- *           ANI_TYPE_TRANS_BEFORE_FOREGROUND/ANI_TYPE_TRANS_BEFORE_BACKGROUND
- *                                           |
- *                                           v
- *                       ANI_TYPE_TRANS_SWIPE/ANI_TYPE_TRANS_TO_FREE
- *                                           |
- *                                           v
- *                                     ANI_TYPE_FREE
- *                                           |
- *                                           v
- *                        ANI_TYPE_FOREGROUND/ANI_TYPE_BACKGROUND
+ * Defines the layer of an animation. Animations with a higher value layer have higher priority
+ * over animations of a lower layer value, e.g. ANI_LAYER_PERSISTENT has a higher priority than
+ * ANI_LAYER_HIGH. Animations with a higher priority essentially "claim" an LED pixel preventing
+ * animations of lower priority from drawing to that pixel for a given draw frame.
+ * In essence, this allows layered animations with low priority animations drawing to
+ * the "background" and higher animations drawing to the "foreground".
  *
- * Pixels get assigned to an animation type, so only the animation function types that follow
- * the rules above are permitted to writing to that pixel.
  */
-typedef uint16_t AniType;
+typedef uint16_t AniLayer;
 
-/* Group: The following type is free for use by old animations  */
-#define ANI_TYPE_OLDFREE_OFFSET           0x0000
-
-/* Available for use immediately in either ANI_TYPE_OLD_OFFSET type animations
- * These are not assignable. Must be assigned a value of 0. These are not assignable.
+/* Unassigned animation. Unassigned animations are innactive when registered by
+ * ANI_RegisterAnimation() and an animation uses the assigned type by
+ * ANI_RegisterAnimation() when ANI_AddNextAnimation() is called.
  */
-#define ANI_TYPE_OLD_FREE                 (ANI_TYPE_OLDFREE_OFFSET + 0x00)
+#define ANI_LAYER_UNASSIGNED               0x00F0
 
-/* Group: The following types are old animations. The animation is limited to the mask in AniParms.
-* These are not assignable.
-*/
-#define ANI_TYPE_OLD_OFFSET               0x0010
+/* Writes to the "bottom" layer (background) */
+#define ANI_LAYER_BOTTOM                   0x0100
 
-/* Old animation mask transitioning away! ANI_TYPE_MASK is assigned this when a transition starts */
-#define ANI_TYPE_OLD_MASK                 (ANI_TYPE_OLD_OFFSET + 0x00)
+/* Writes to the "middle" layer (middle ground) */
+#define ANI_LAYER_MIDDLE                   0x0200
 
-/* Old background animation transitioning away! ANI_TYPE_BACKGROUND is assigned this type when
- * a transition has started.
+/* Writes to the "top" layer (foreground) */
+#define ANI_LAYER_TOP                      0x0400
+
+/* Persistent type. Higher priority than ANI_TYPE_TOP. This type keeps the pixel set
+ * to the last value drawn until black is drawn by an animation that has this type, after
+ * which it is free to be drawn by any animation. This type is useful for foreground
+ * animations that don't write to a pixel on every draw frame such as when the animation's
+ * FPS target is set lower than the refresh rate.
  */
-#define ANI_TYPE_OLD_BACKGROUND           (ANI_TYPE_OLD_OFFSET + 0x01)
+#define ANI_LAYER_PERSISTENT               0x0401
 
-/* Old foreground animation transitioning away! ANI_TYPE_FOREGROUND is assigned this type when
- * a transition has started. Can overwrite ANI_TYPE_OLD_BACKGROUND
+/* Transition type. Highest priority. This type keeps the pixel set to the last value
+ * drawn until black is drawn by an animation that has this type, or when an animation of
+ * this type expires, after which it is free to be drawn by any animation. It is intended
+ * to be used by animations that "transition" out a previous one with a new one.
+ *
+ * Tip: Set the RGB color to 0 (black) to let a pixel be drawn by a new animation on the same
+ * draw frame.
  */
-#define ANI_TYPE_OLD_FOREGROUND           (ANI_TYPE_OLD_OFFSET + 0x02)
+#define ANI_LAYER_TRANSITION               0x0800
 
-/* Group: The following types are main animations */
-#define ANI_TYPE_MAIN_OFFSET              0x0020
-
-/* Main animation mask. The animation is limited to the mask in AniParms */
-#define ANI_TYPE_MASK                     (ANI_TYPE_MAIN_OFFSET + 0x00)
-
-/* Main background animation. Can overwrite ANI_TYPE_FREE */
-#define ANI_TYPE_BACKGROUND               (ANI_TYPE_MAIN_OFFSET + 0x01)
-
-/* Main foreground animation. Can overwrite ANI_TYPE_FREE or ANI_TYPE_BACKGROUND */
-#define ANI_TYPE_FOREGROUND               (ANI_TYPE_MAIN_OFFSET + 0x02)
-
-/* Group: The following types are transition animations */
-#define ANI_TYPE_TRANS_OFFSET             0x0040
-
-/* Transition swipe animation. Pixels written during the current frame are then assigned to the
- * ANI_TYPE_FREE type after the current frame.
- */
-#define ANI_TYPE_TRANS_SWIPE              (ANI_TYPE_TRANS_OFFSET + 0x00)
-
-/* Transparent Transition. Pixels are not written but still get assigned to the ANI_TYPE_FREE type
- * during the current frame.
- */
-#define ANI_TYPE_TRANS_TRANS              (ANI_TYPE_TRANS_OFFSET + 0x01)
-
-/* Group: The following types are miscellaneous animations. */
-#define ANI_TYPE_FREE_OFFSET              0x0080
-
-/* Available for use immediately in either ANI_TYPE_MAIN_OFFSET type animations
- * These are not assignable.
- */
-#define ANI_TYPE_FREE                     (ANI_TYPE_FREE_OFFSET + 0x00)
-
-#define ANI_TYPE_SPECIAL_1                0x0100
-
-#define ANI_TYPE_SPECIAL_2                0x0200
-
-#define ANI_TYPE_SPECIAL_3                0x0400
-
-#define ANI_TYPE_SPECIAL_4                0x0800
-
-
-/* End AniType type */
+/* End AniLayer type */
 
 /* --------------------------------------------------------------------------------------------
  * AniMod type
  *
- * Bitmask of different modifications/effects to apply to an animation. Each animation
- * will describe what each value does in the function description.
+ * Specific modifications to some animations
+ *
  */
 typedef uint8_t AniMod;
 
-/* Apply no special affects to the animation */
-#define ANI_MOD_NONE             0x00
-
-/* Apply modification 1 */
-#define ANI_MOD_1                0x01
-
-/* Apply modification 2 */
-#define ANI_MOD_2             0x02
-
-/* Apply modification 3 */
-#define ANI_MOD_3             0x04
-
-/* Apply modification 4 */
-#define ANI_MOD_4             0x08
+#define ANI_MOD_1                   0x01
+#define ANI_MOD_2                   0x02
+#define ANI_MOD_3                   0x04
+#define ANI_MOD_4                   0x08
 
 /* End AniMod type */
 
+/* --------------------------------------------------------------------------------------------
+ * AniPixel type
+ *
+ * Desribes the state of an LED pixel.
+ *
+ */
+typedef struct _AniPixel {
+    /* ANI_TAG_REMEMBRANCE animations can set this node to their animation pack */
+    ListNode    node;
+
+    uint16_t    pixNum;
+    uint16_t    crit; /* type AniCriteria */
+
+    CRGB       color;
+} AniPixel;
 
 /* --------------------------------------------------------------------------------------------
  * AniParms type
@@ -218,8 +208,8 @@ typedef uint8_t AniMod;
  */
 typedef struct _AniParms {
 
-    /* The current Hue value */
-    uint8_t hue;
+    /* The current Hue, saturation, and value (brightness) */
+    CHSV    hsv;
 
     CRGB::HTMLColorCode color;
 
@@ -234,15 +224,17 @@ typedef struct _AniParms {
     uint16_t counter;
 
     /* The max brightness */
-    uint8_t maxBright;
+    uint8_t size;
 
     uint8_t chance;
 
+    /* Used by tag ANI_TAG_REMEMBRANCE */
+    ListNode pixList;
+
     uint16_t fpsTarg;
 
-    AniType type;
-
     AniMod mod;
+
 
     uint16_t x0;
     uint16_t y0;
@@ -267,10 +259,10 @@ typedef struct _AniParms {
 
         /* Valid when animation type is ANI_TYPE_MASK. */     
         struct {
-            /* This is a pointer to a buffer of size SM_NUM_LEDS filled out with the
+            /* This is a pointer to a buffer of size LI_NUM_LEDS filled out with the
              * mask the animation is permitted to write to.
              */
-            AniType *maskType;
+            AniLayer *maskType;
 
             /* Create a function pointer var that can be called to update the mask values */
             // void foo(maskType);
@@ -293,7 +285,7 @@ typedef struct _AniParms {
  * Function pointer to an animated LED sequence
  *
  */
-typedef void (*AniFunc)(AniParms *Ap, AniType At);
+typedef void (*AniFunc)(AniParms *Ap);
 
 /* --------------------------------------------------------------------------------------------
  * AniPack type
@@ -303,24 +295,41 @@ typedef void (*AniFunc)(AniParms *Ap, AniType At);
  *
  */
 struct _AniPack {
-    /* A node to be placed onto a list. Initialize the node with InitNode().
-     * Must be first member in this struct.
+    /* A list node that will be placed onto a list to be managed by this layer.
+     * Internal use only. Don't modify.
      */
     ListNode     node; /* Must be first */
 
-    /* A pointer to an animation function. To be filled prior to calling ANI_AddAnimation() */
+    /* Group: The following must be initialized prior to calling ANI_RegisterAnimation()
+     * (In reality it can be delayed until ANI_SwapAnimation() is called but for simplicity
+     * it should be filled out before registering the animation).
+     */
+
+    /* A pointer to an animation function */
     AniFunc      funcp;
 
     /* Different animation configuration options for the animation in aniFunc.
-     * To be filled prior to calling ANI_AddAnimation().
+     * These parms allow for different affects to happen on an animation in real time.
+     * The useful parms to modify depend on the animation tag. Most parms can be modified
+     * between calls to ANI_DrawAnimationFrame().
      */
     AniParms     parms;
 
-    /* ~~ Internal Fields. ~~ They should not be set by the user */
-    /* The type of animation to treat the animation in funcp. Can be read. It gets assigned the
-     * type that was passed in ANI_AddAnimation().
+    /* Animation tag. */
+    AniTags      tags;
+
+    /* Group: The following is modified by ANI_RegisterAnimation() */
+
+    /* Default layer of the animmation. The animation can be temporarily changed to a different
+     * layer if one is specified in the ANI_AddNextAnimation() function otherwise the default
+     * will be used.
      */
-    AniType      type;
+    AniLayer     defaultLayer;
+
+    /* ~~ Internal Fields. ~~ They should not be set by the user */
+
+    /* The current criteria of this animation */
+    uint16_t      currCriteria; /* AniCriteria type */
 };
 
 
@@ -329,38 +338,54 @@ struct _AniPack {
  * --------------------------------------------------------------------------------------------
  */
 
-void ANI_Init(AniType *OwnerArray);
+bool ANI_Init(void);
 
-/* Adds an unused AniPack to an animation list of the type "At" */
-bool ANI_AddAnimation(AniPack *Ap, AniType At);
+/* Register an unused AniPack to an animation list */
+bool ANI_RegisterAnimation(AniPack *Ap, AniLayer DefaultLayer);
 
-/* Fills out the LedBuff with animations :3 */
-void ANI_RemoveAnimation(AniPack *Ap);
+/* Unregisters an animation that was previously registered */
+bool ANI_UnregisterAnimation(AniPack *Ap, bool Force);
 
-/* Queue animations */
-bool ANI_QueueAnimation(AniPack *Ap);
+/* Add animations that will become active when ANI_SwapAnimation() is called */
+bool ANI_AddNextAnimation(AniPack *Ap, AniLayer OverrideLayer);
+
+/* Add animations that will become active after ANI_SwapAnimation() is called. */
+bool ANI_AddNextAnimationByFuncP(AniFunc FuncP, AniLayer OverrideLayer);
 
 /* Add the queued animation to the active list */
-void ANI_SwapAnimation();
+void ANI_SwapAnimation(bool UseBlending);
+
+/* Checks if the current animation is allowed to write to this pixel */
+AniPixel *ANI_CheckPixNum(uint32_t PixNum);
+
+/* Checks if the current animation is allowed to write to this pixel */
+bool ANI_CheckPix(AniPixel *Pix);
+
+// Writes the pixel to the PixNum LED if it has permission to
+void ANI_WriteVerifiedPix(AniParms *Ap, AniPixel *Pix, const CRGB &RgbVal);
+
+// Writes the pixel to the PixNum LED if it has permission to
+void ANI_WritePixel(AniParms *Ap, uint32_t PixNum, const CRGB &RgbVal);
 
 /* Fills out the LedBuff with animations :3 */
 uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff);
 
-// Writes the pixel to the PixNum LED if it has permission to
-void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, const rgb24 &RgbVal);
 
 /* Group: The following functions are animation functions of type AniFunc */
 
+void AniWriteToBuffer(void);
+
 /* Creates some noise in the animation that is fluid-like */
-void ANIFUNC_FillNoise8(AniParms *Ap, AniType At);
+#if 0
+void ANIFUNC_FillNoise8(AniParms *Ap);
 
-void ANIFUNC_Glitter(AniParms *Ap, AniType At);
+void ANIFUNC_Glitter(AniParms *Ap);
+#endif
 
-void ANIFUNC_Rainbow(AniParms *Ap, AniType At);
+void ANIFUNC_RainbowIris(AniParms *Ap);
 
-void ANIFUNC_PlazInt(AniParms *Ap, AniType At);
-
-void ANIFUNC_Confetti(AniParms *Ap, AniType At);
+void ANIFUNC_PlazInt(AniParms *Ap);
+void ANIFUNC_Confetti(AniParms *Ap);
 
 
 #endif /* _ANIMATIONS_HPP_ */

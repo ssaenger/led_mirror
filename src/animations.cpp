@@ -16,13 +16,27 @@
 
 
 /* --------------------------------------------------------------------------------------------
+ *  MACROS
+ * --------------------------------------------------------------------------------------------
+ */
+
+#define RETURN_IS_VALID_RIGHT(p)   {                                          \
+                                        if ((currAc >= (p)->crit) ||          \
+                                            ((p)->crit == ANI_CRIT_BLEND)) {  \
+                                            return true;                      \
+                                        }                                     \
+                                        return false;                         \
+                                    }
+
+/* --------------------------------------------------------------------------------------------
  *  GLOBALS
  * --------------------------------------------------------------------------------------------
  */
 
 
-static AniInfo  aniInfo;
-static uint16_t numWritten;
+static AniInfo     aniInfo;
+static uint16_t    numWritten;
+static AniCriteria currAc;
 
 /* --------------------------------------------------------------------------------------------
  *  PROTOTYPES
@@ -46,114 +60,229 @@ static bool AniCheckTranDel(AniParms *Ap);
  *
  * Parameters:     None
  *
- * Returns:        void
+ * Returns:        true if successful. false otherwise.
  */
-void ANI_Init(AniType *OwnerArray)
+bool ANI_Init(void)
 {
     uint16_t i;
+
+    // Sanity check. Check values between two types are equal
+    if (!((ANI_LAYER_UNASSIGNED == ANI_CRIT_BELOW_ANY) &&
+        (ANI_LAYER_BOTTOM == ANI_CRIT_LOW) &&
+        (ANI_LAYER_MIDDLE == ANI_CRIT_MEDIUM) &&
+        (ANI_LAYER_TOP == ANI_CRIT_HIGH) &&
+        (ANI_LAYER_PERSISTENT == ANI_CRIT_HIGH_PERSISTENT) &&
+        (ANI_LAYER_TRANSITION == ANI_CRIT_TRANSITION))) {
+
+        return false;
+    }
+
     InitList(&aniInfo.activeList);
     InitList(&aniInfo.mainWaitList);
     InitList(&aniInfo.transWaitList);
     InitList(&aniInfo.queueList);
     aniInfo.numMainWaiting = 0;
     aniInfo.numTransWaiting = 0;
-    aniInfo.owners = OwnerArray;
 
-    Serial.printf("aniTypeArray before: 0x%x\r\n", aniInfo.owners[0]);
-    for (i = 0; i < SM_NUM_LEDS; i++) {
-        aniInfo.owners[i] = ANI_TYPE_FREE;
+    aniInfo.pix = (AniPixel*)malloc(sizeof(AniPixel) * LEDI_NUM_LEDS);
+    if (aniInfo.pix == 0) {
+        Serial.println("Could not allocate memory for animations");
+        return false;
     }
-    if (aniInfo.owners != OwnerArray) {
-        Serial.println("not equal!!");
+
+    for (i = 0; i < LEDI_NUM_LEDS; i++) {
+        InitNode(&aniInfo.pix[i].node);
+        aniInfo.pix[i].pixNum = i;
+        aniInfo.pix[i].color.setRGB(0, 0, 0);
+        aniInfo.pix[i].crit = ANI_CRIT_DEFAULT;
     }
-    Serial.printf("aniTypeArray after: 0x%x\r\n", aniInfo.owners[0]);
+
+    return true;
 }
 
 /* --------------------------------------------------------------------------------------------
  *                 ANI_AddAnimation()
  * --------------------------------------------------------------------------------------------
- * Description:    Adds a AniFuncInfo to the list of animations to draw from
+ * Description:    Registeres a AniPack to a list of available animations. Available animations
+ *                 can be added to a pending list through ANI_AddNextAnimation() and then
+ *                 are active once ANI_SwapAnimation() is called.
  *
- * Parameters:     Ap - A pointer to a AniPack with "funcp" and "parms" filled out and "node"
- *                      initialized with InitNode().
- *                 At - The type of animation inside "Ap->funcp". 
- *                      Must be a ANI_TYPE_MAIN_OFFSET or ANI_TYPE_TRANS_OFFSET type animation
+ * Parameters:     Ap - A pointer to a AniPack with the fields filled out according to its
+ *                      description.
+ *                 DefaultLayer - The type of animation inside "Ap->funcp". 
+ *                     
  *
  * Returns:        true it was added, false otherwise beceuse the type is bad or the AniPack
  *                 was already added to a list. It could also be that "Ap->node" was not iniitialized
  *                 with InitNode() yet.
  */
-bool ANI_AddAnimation(AniPack *Ap, AniType At)
+bool ANI_RegisterAnimation(AniPack *Ap, AniLayer DefaultLayer)
 {
-    if (IsNodeUsed(&Ap->node)) {
-        /* Already added. */
-        return false;
-    }
+    Serial.printf("activeList.F 0x%x, activeList.B 0x%x, Ap->node.F 0x%x, Ap->node.B 0x%x ",
+    aniInfo.activeList.linkF, aniInfo.activeList.linkB, Ap->node.linkF, Ap->node.linkB);
+    //if ((IsNodeOnList(&aniInfo.activeList, &Ap->node))) {
+    // ||
+        //(IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) || 
+        //(IsNodeOnList(&aniInfo.mainWaitList, &Ap->node))) {
+        // Node is already registered
+    //    Serial.println("ANI_RegisterAnimation returning false");
+    //    return false;
+    //}
+    delay(10);
+    Serial.println("ANI_RegisterAnimation 1");
+    InitNode(&Ap->node);
+    Ap->defaultLayer = DefaultLayer;
 
-    if (At & (ANI_TYPE_MAIN_OFFSET | ANI_TYPE_SPECIAL_1)) {
+    if (DefaultLayer & ANI_LAYER_TRANSITION) {
         /* Place this in the waiting main list */
-        //Serial.printf("list addr: %p, F->%p, B->%p, node addr %p, F->%p, B->%p",
-        //              &aniInfo.mainWaitList, aniInfo.mainWaitList.linkF, aniInfo.mainWaitList.linkB,
-        //               &Ap->node, Ap->node.linkF, Ap->node.linkB);
-        InsertTail(&aniInfo.mainWaitList, &Ap->node);
-        aniInfo.numMainWaiting++;
-    } else if (At & ANI_TYPE_TRANS_OFFSET) {
-        /* Place this in the waiting transition list */
         InsertTail(&aniInfo.transWaitList, &Ap->node);
         aniInfo.numTransWaiting++;
     } else {
-        return false;
+        InsertTail(&aniInfo.mainWaitList, &Ap->node);
+        aniInfo.numMainWaiting++;
     }
-
-    Ap->type = At;
+    Serial.println("ANI_RegisterAnimation 2");
+    delay(10);
     return true;
-
 }
 
 /* --------------------------------------------------------------------------------------------
- *                 ANI_RemoveAnimation()
+ *                 ANI_UnregisterAnimation()
  * --------------------------------------------------------------------------------------------
- * Description:    Removes an AniPack that was added to the list
+ * Description:    Unregistered an AniPack that was previously registered
  *
  * Parameters:     AniPack - a pointer to a AniPack that was added earlier
+ *                 Force - forcefully remove an animation even if it is actively being used.
+ *                         If true, this function is guaranteed to return true as well.
  *
- * Returns:        void
+ * Returns:        true if it was removed or never registered. false if it cannot be removed
  */
-void ANI_RemoveAnimation(AniPack *Ap)
+bool ANI_UnregisterAnimation(AniPack *Ap, bool Force)
 {
-    if (IsNodeUsed(&Ap->node)) {
+    /* Note: calling IsNodeUsed() here can be problematic if caller never called
+     * ANI_RegisterAnimation() in case Ap->node is uninitialized. So a work-around
+     * is to check if the node is on a list, not just if the node is being used.
+    */
+    if (IsNodeOnList(&aniInfo.activeList, &Ap->node)) {
+        if (!Force) {
+            /* Currently in use */
+            return false;
+        }
+        AniSetInactive(Ap);
+    }
+
+    if (IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
+        aniInfo.numMainWaiting--;
+        RemoveNode(&Ap->node);
+    } else if (IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) {
+        aniInfo.numTransWaiting--;
         RemoveNode(&Ap->node);
     }
+
+    return true;
 }
 
 /* --------------------------------------------------------------------------------------------
- *                 ANI_QueueAnimation()
+ *                 ANI_AddNextAnimation()
  * --------------------------------------------------------------------------------------------
- * Description:    Queues 1 or more animations. Once ANI_SwapAnimation() is called, queued
+ * Description:    Queues an animations. Once ANI_SwapAnimation() is called, queued
  *                 animations will be moved to the active list. If any animations are transition
  *                 type animations, the previous main animations will be phased out over time.
  *                 If there are no transition type animations, then the previous main animations
- *                 will retire immediately.
+ *                 will retire immediately, unless the "blend" option is chosen in
+ *                 ANI_SwapAnimation()
  *
- * Parameters:     Ap - A pointer to a AniPack with that was added with ANI_AddAnimation(). This
- *                      animation will be added to the queue.
+ * Parameters:     Ap - A pointer to a AniPack with that was added with ANI_RegisterAnimation().
+ *                      This animation will be added to the queue.
+ *                 OverrideLayer - Select a different layer to play this animation different
+ *                                  than the default. Set to 0 to keep the default layer.
  *
  * Returns:        true if moved from waiting list to queue list. false if did not
  */
-bool ANI_QueueAnimation(AniPack *Ap)
+bool ANI_AddNextAnimation(AniPack *Ap, AniLayer OverrideLayer)
 {
-    if ((Ap->type & (ANI_TYPE_MAIN_OFFSET | ANI_TYPE_SPECIAL_1)) && IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
-        RemoveNode(&Ap->node);
-        aniInfo.numMainWaiting--;
-    } else if ((Ap->type & ANI_TYPE_TRANS_OFFSET) && IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) {
+    Serial.println("ANI_AddNextAnimation 1");
+    if (IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) {
         RemoveNode(&Ap->node);
         aniInfo.numTransWaiting--;
+        Serial.println("ANI_AddNextAnimation 2");
+    } else if (IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
+        RemoveNode(&Ap->node);
+        aniInfo.numMainWaiting--;
+        Serial.println("ANI_AddNextAnimation 3");
     } else {
         return false;
+    }
+
+    Serial.printf("ANI_AddNextAnimation: OverrideLayer 0x%x, Ap->defaultLayer 0x%x\r\n",
+                    OverrideLayer, Ap->defaultLayer);
+    if (OverrideLayer > ANI_LAYER_UNASSIGNED) {
+        Serial.println("ANI_AddNextAnimation 3.1");
+        Ap->currCriteria = (AniCriteria)OverrideLayer;
+    } else {
+        Serial.println("ANI_AddNextAnimation 3.2");
+        Ap->currCriteria = (AniCriteria)Ap->defaultLayer;
     }
 
     /* Insert into queue list */
     InsertTail(&aniInfo.queueList, &Ap->node);
+    Serial.printf("ANI_AddNextAnimation 4. Ap->currCriteria == 0x%x\n\r", Ap->currCriteria);
+
+    return true;
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 ANI_AddNextAnimationByFuncP()
+ * --------------------------------------------------------------------------------------------
+ * Description:    Queue an animation by providing its function pointer. The first registered
+ *                 animation that matches the function pointer will be added, unless it is
+ *                 already added, in which case it will attempt the to add the next one if
+ *                 one exists. Once ANI_SwapAnimation() is called, queued
+ *                 animations will be moved to the active list. If any animations are transition
+ *                 type animations, the previous main animations will be phased out over time.
+ *                 If there are no transition type animations, then the previous main animations
+ *                 will retire immediately, unless the "blend" option is chosen in
+ *                 ANI_SwapAnimation()
+ *
+ * Parameters:     FuncP - A pointer to the animation function. Must have already been registered
+ *                         via ANI_RegisterAnimation().
+ *                 OverrideLayer - Select a different layer to play this animation different
+ *                                  than the default. Set to 0 to keep the default layer.
+ *
+ * Returns:        true if moved from waiting list to queue list. false if did not
+ */
+bool ANI_AddNextAnimationByFuncP(AniFunc FuncP, AniLayer OverrideLayer)
+{
+    AniPack *ap;
+
+    IterateList(aniInfo.mainWaitList, ap, AniPack*) {
+        if (FuncP == ap->funcp) {
+            /* Found a matching animation */
+            aniInfo.numMainWaiting--;
+            goto found;
+        }
+    }
+    IterateList(aniInfo.transWaitList, ap, AniPack*) {
+        if (FuncP == ap->funcp) {
+            /* Found a matching transition animation */
+            aniInfo.numTransWaiting--;
+            goto found;
+        }
+    }
+
+    /* Function is not registered or is already added to queue */
+    return false;
+
+found:
+    if (OverrideLayer > ANI_LAYER_UNASSIGNED) {
+        ap->currCriteria = (AniCriteria)OverrideLayer;
+    } else {
+        ap->currCriteria = (AniCriteria)ap->defaultLayer;
+    }
+
+    /* Insert into queue list */
+    MoveNodeBefore(&aniInfo.queueList, &ap->node);
+    Serial.printf("ANI_AddNextAnimation 4. Ap->currCriteria == 0x%x\n\r", ap->currCriteria);
 
     return true;
 }
@@ -167,7 +296,7 @@ bool ANI_QueueAnimation(AniPack *Ap)
  *
  * Returns:        void
  */
-void ANI_SwapAnimation()
+void ANI_SwapAnimation(bool UseBlending)
 {
     AniPack  *aniPack;
     AniPack  *aniPack2;
@@ -179,82 +308,264 @@ void ANI_SwapAnimation()
 
     /* Step 1: Check if any trans animations are present in the queue list */
     IterateList(aniInfo.queueList, aniPack, AniPack *) {
-        //Serial.println("ANI_SwapAnimation: iter step 1");
-        if (aniPack->type & ANI_TYPE_TRANS_OFFSET) {
-            /* Insert before this node */
-            transPresent = true;
-            aniInfo.tranInProg = true;
-            break;
+        Serial.println("ANI_SwapAnimation: iter step 1");
+        if (aniPack->currCriteria & ANI_CRIT_TRANSITION) {
+            if (UseBlending) {
+                AniSetInactive(aniPack);
+            } else {
+                transPresent = true;
+                aniInfo.tranInProg = true;
+                break;
+            }
         }
     }
 
-    /* Step 2: Move main animations to old animations */
-    //Serial.println("ANI_SwapAnimation: step 2");
+    /* Step 2: Set active animation criteria to below normal */
+    Serial.println("ANI_SwapAnimation: step 2");
     if (transPresent) {
-        //Serial.println("ANI_SwapAnimation: tranpresent");
-        for (i = 0; i < SM_NUM_LEDS; i++) {
-            aniInfo.owners[i] &= ~ANI_TYPE_FREE_OFFSET;
+        //Serial.println("ANI_SwapAnimation: transpresent");
+        for (i = 0; i < LEDI_NUM_LEDS; i++) {
+            aniInfo.pix[i].crit = ANI_CRIT_BELOW_LOW;
         }
-        //memset(aniInfo.owners, ANI_TYPE_OLD_FREE, SM_NUM_LEDS);
+        /* Like IterateListSafely(), this while loop lets you safely remove
+         * a node from a list while iterating through it.
+         */
         nodeItr = &aniInfo.activeList;
         while ((nodeItr = GetNextNode(nodeItr)) != &aniInfo.activeList) {
-            //Serial.println("ANI_SwapAnimation: 1");
+            Serial.println("ANI_SwapAnimation: 1");
             aniPack = (AniPack*)nodeItr;
-            if (aniPack->type & ANI_TYPE_MAIN_OFFSET) {
-                nodeItr = GetPriorNode(nodeItr);
-                RemoveNode(&aniPack->node);
-
-                /* Assign the "OLD" type */
-                aniPack->type &= ~ANI_TYPE_MAIN_OFFSET;
-                aniPack->type |= ANI_TYPE_OLD_OFFSET;
-
-                /* Move this ahead of the active list to it's appropriate spot */
-                transPresent = false;
-                IterateList(aniInfo.activeList, aniPack2, AniPack *) {
-                    if (aniPack->type <= aniPack2->type) {
-                        /* Insert before this node */
-                        InsertBefore(&aniPack2->node, &aniPack->node);
-                        transPresent = true;
-                        break; /* Must break out of IterateList() */
-                    }
-                }
-                if (!transPresent) {
-                    InsertTail(&aniInfo.activeList, &aniPack->node);
-                }
+            if (aniPack->currCriteria == ANI_CRIT_TRANSITION) {
+                nodeItr = GetPriorNode(nodeItr); /* Get prior node to prevent breaking list */
+                /* Remove old transition */
+                AniSetInactive(aniPack); /* Removes node from list */
+                continue;
             }
+
+            /* Change the active criteria to its old criteria preserving the persistent flag */
+            aniPack->currCriteria = ((aniPack->currCriteria >> 4) | (aniPack->currCriteria & ANI_CRIT_PERSISTENT));
         }
     } else {
         while (!IsListEmpty(&aniInfo.activeList)) {
-            //Serial.println("ANI_SwapAnimation: 1");
+            Serial.println("ANI_SwapAnimation: 1");
             aniPack = (AniPack*)GetHead(&aniInfo.activeList);
             AniSetInactive(aniPack);
+        }
+        /* Since no transaction, black out all the pixels */
+        for (i = 0; i < LEDI_NUM_LEDS; i++) {
+            aniInfo.pix[i].color = 0;
         }
     }
 
     /* Step 3: Move all animations from queue list to active list */
+    aniInfo.fpsTarg = 0;
     while (!IsListEmpty(&aniInfo.queueList)) {
         aniPack = (AniPack*)GetHead(&aniInfo.queueList);
-        Serial.printf("ANI_SwapAnimation: queue type 0x%x\r\n", aniPack->type);
-
-        RemoveNode(&aniPack->node);
+        Serial.printf("ANI_SwapAnimation: queue type 0x%x\r\n", aniPack->currCriteria);
 
         aniPack->parms.startTime = millis();
         aniPack->parms.delay = millis();
         aniPack->parms.value = 0;
+        aniInfo.fpsTarg = max(aniInfo.fpsTarg, aniPack->parms.fpsTarg);
 
-        /* Insert into the active list in it's appropriate spot */
+        /* Insert into the active list in its appropriate spot */
         inserted = false;
         IterateList(aniInfo.activeList, aniPack2, AniPack *) {
-            if (aniPack->type <= aniPack2->type) {
+            if (aniPack->currCriteria >= aniPack2->currCriteria) {
                 /* Insert before this node */
-                InsertBefore(&aniPack2->node, &aniPack->node);
+                MoveNodeBefore(&aniPack2->node, &aniPack->node);
                 inserted = true;
                 break;
             }
         }
         if (!inserted) {
+            RemoveNode(&aniPack->node);
             InsertTail(&aniInfo.activeList, &aniPack->node);
         }
+    }
+//    IterateList(aniInfo.activeList, aniPack2, AniPack *) {
+//        Serial.println(aniPack2->currCriteria);
+//    }
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 ANI_CheckPixNum()
+ * --------------------------------------------------------------------------------------------
+ * Description:    
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+AniPixel *ANI_CheckPixNum(uint32_t PixNum)
+{
+    AniPixel *pix;
+    if (PixNum >= LEDI_NUM_LEDS) {
+        return 0;
+    }
+    pix = &aniInfo.pix[PixNum];
+
+    if ((currAc >= pix->crit) || ((pix)->crit == ANI_CRIT_BLEND)) {
+        switch (currAc) {
+        case ANI_CRIT_BELOW_LOW:
+        case ANI_CRIT_BELOW_MEDIUM:
+        case ANI_CRIT_BELOW_HIGH:
+        case ANI_CRIT_BELOW_HIGH_PERSISTENT:
+            // Only the animations being transitioned out can write to
+            // this pixel
+            if ((pix->crit & ANI_CRIT_BELOW_ANY) != 0) {
+                Serial.println("ANI_CheckPixNum returns 0 first");
+                return 0;
+            }
+            break;
+        
+        default:
+            if (pix->crit & ANI_CRIT_BELOW_ANY) {
+                // Anything that is not an exclusive can't write
+                // to this pixel
+                Serial.println("ANI_CheckPixNum returns 0 second");
+                return 0;
+            }
+        }
+        return pix;
+    }
+    return 0;
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 ANI_CheckPix()
+ * --------------------------------------------------------------------------------------------
+ * Description:    
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+bool ANI_CheckPix(AniPixel *Pix)
+{
+    if ((currAc >= Pix->crit) || (Pix->crit == ANI_CRIT_BLEND)) {
+        switch (currAc) {
+        case ANI_CRIT_BELOW_LOW:
+        case ANI_CRIT_BELOW_MEDIUM:
+        case ANI_CRIT_BELOW_HIGH:
+        case ANI_CRIT_BELOW_HIGH_PERSISTENT:
+            // Only the animations being transitioned out can write to
+            // this pixel
+            if ((Pix->crit & ANI_CRIT_BELOW_ANY) != 0) {
+                return 0;
+            }
+            break;
+        
+        default:
+            if (Pix->crit & ANI_CRIT_BELOW_ANY) {
+                // Anything that is not an exclusive can't write
+                // to this pixel
+                return 0;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 ANI_WriteVerifiedPix()
+ * --------------------------------------------------------------------------------------------
+ * Description:    
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+void ANI_WriteVerifiedPix(AniParms *Ap, AniPixel *Pix, const CRGB &RgbVal)
+{
+    AniCriteria  currCrit = currAc;
+    if (Pix->crit == ANI_CRIT_BLEND) {
+
+    } else {
+
+        switch (currCrit) {
+        case ANI_CRIT_BELOW_HIGH_PERSISTENT:
+            if (!RgbVal) {
+                currCrit = ANI_CRIT_BELOW_LOW;
+            }
+            break;
+
+        case ANI_CRIT_HIGH_PERSISTENT:
+        case ANI_CRIT_TRANSITION:
+            if (!RgbVal) {
+                currCrit = ANI_CRIT_DEFAULT;
+            }
+            break;
+
+        default:
+            break;
+        }
+        // Save this criteria and color
+        Pix->crit = currCrit;
+        Pix->color = RgbVal;
+        numWritten++;
+    }
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 ANI_WritePixel()
+ * --------------------------------------------------------------------------------------------
+ * Description:    
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+void ANI_WritePixel(AniParms *Ap, uint32_t PixNum, const CRGB &RgbVal)
+{
+    AniPixel *pix;
+    AniCriteria  currCrit = currAc;
+
+    if (PixNum >= LEDI_NUM_LEDS) {
+        Serial.println("Overbounds!");
+        //PixNum = LEDI_NUM_LEDS - 1;
+        return;
+    }
+    pix = &aniInfo.pix[PixNum];
+    //Serial.printf("owner at this pix %d is 0x%x\r\n", PixNum, aniInfo.owners[PixNum]);
+
+    if (currCrit >= pix->crit) {
+
+        switch (currCrit) {
+        case ANI_CRIT_BELOW_LOW:
+        case ANI_CRIT_BELOW_MEDIUM:
+        case ANI_CRIT_BELOW_HIGH:
+        case ANI_CRIT_BELOW_HIGH_PERSISTENT:
+            // Only the animations being transitioned out can write to
+            // this pixel
+            if ((currCrit & ANI_CRIT_BELOW_ANY) != 0) {
+                return;
+            } else if ((currCrit == ANI_CRIT_BELOW_HIGH_PERSISTENT) && !RgbVal) {
+                currCrit = ANI_CRIT_BELOW_LOW;
+            }
+            break;
+
+        case ANI_CRIT_HIGH_PERSISTENT:
+        case ANI_CRIT_TRANSITION:
+            if (!RgbVal) { 
+                currCrit = ANI_CRIT_LOW;
+            }
+            break;
+
+        default:
+            if (pix->crit & ANI_CRIT_BELOW_ANY) {
+                // Anything that is not a transition can't write
+                // to this pixel
+                return;
+            }
+            break;
+        }
+        // Save this criteria and color
+        pix->crit = currCrit;
+        pix->color = RgbVal;
+        numWritten++;
+    } else if (pix->crit == ANI_CRIT_BLEND) {
+        
     }
 }
 
@@ -263,7 +574,7 @@ void ANI_SwapAnimation()
  * --------------------------------------------------------------------------------------------
  * Description:    Draw an animation frame funcs added earlier
  *
- * Parameters:     ledBuff - pointer to a LED buffer to fill
+ * Parameters:     drawBuff - pointer to a LED buffer to fill
  *
  * Returns:        number of pixels written to the LedBuff. This counts pixels that were
  *                 written more than once.
@@ -271,56 +582,34 @@ void ANI_SwapAnimation()
 uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
 {
     uint32_t tCount;
+    uint32_t now;
     AniPack *aniPack;
     AniPack *aniPack2;
     
 
-    aniInfo.ledBuff = LedBuff;
+    aniInfo.drawBuff = LedBuff;
     numWritten = 0;
     tCount = 0;
+    now = millis();
 
     /* Sort through each animation and check if it should be */
     //Serial.println("ANI_DrawAnimationFrame: Begin");
+    if (now < aniInfo.msDelay) {
+        /* Not yet time to draw a frame */
+        return 0;
+    }
+
+    /* Time to draw a frame! Get the next delay needed before we can draw the next frame */
+    aniInfo.msDelay = now + fps2Ms(aniInfo.fpsTarg);
 
     IterateList(aniInfo.activeList, aniPack, AniPack*) {
-        if (!AniCheckTranDel(&aniPack->parms)) {
-            /* Not enough time has passed to play this animation since the FPS target
-             * is lower than what we are capable of playing
-             */
-            //Serial.prntlin("Skipping not time yet");
-            if (aniPack->type & ANI_TYPE_TRANS_OFFSET) {
-                tCount++;
-            }
-            continue;
-        }
-        aniPack->parms.delay = millis() + fps2Ms(aniPack->parms.fpsTarg);
 
-        //Serial.printf("ANI_DrawAnimationFrame: type 0x%x. delay %lu\r\n", aniPack->type, aniPack->parms.delay);
-        switch (aniPack->type) {
-        case ANI_TYPE_MASK:
-            break;
-
-        case ANI_TYPE_BACKGROUND:
-        case ANI_TYPE_FOREGROUND:
-            aniPack->funcp(&aniPack->parms, aniPack->type);
-            //Serial.printf("millis after: %lu\r\n", millis());
-            break;
-
-        case ANI_TYPE_FREE:
-            break;
-
-        case ANI_TYPE_OLD_FOREGROUND:
-            aniPack->funcp(&aniPack->parms, aniPack->type);
-            break;
-
-        case ANI_TYPE_OLD_BACKGROUND:
-            aniPack->funcp(&aniPack->parms, aniPack->type);
-            break;
-
-        case ANI_TYPE_TRANS_SWIPE:
-        case ANI_TYPE_TRANS_TRANS:
+        //Serial.printf("ANI_DrawAnimationFrame: criteria 0x%x. delay %lu\r\n", aniPack->currCriteria, aniPack->parms.delay);
+        currAc = aniPack->currCriteria;
+        switch (currAc) {
+        case ANI_CRIT_TRANSITION:
             tCount++;
-            aniPack->funcp(&aniPack->parms, aniPack->type);
+            aniPack->funcp(&aniPack->parms);
 
             /* Check if transition is over */
             //Serial.printf("ElapsTime %lu\r\n", aniPack->parms.p.trans.transElapsTime);
@@ -333,7 +622,7 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
             break;
 
         default:
-            aniPack->funcp(&aniPack->parms, aniPack->type);
+            aniPack->funcp(&aniPack->parms);
             break;
         }
     }
@@ -341,9 +630,15 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
     if (aniInfo.tranInProg && tCount == 0) {
         AniTransDone();
     }
-    return numWritten;
+
+    if (numWritten > 0) {
+        AniWriteToBuffer();
+        return LEDI_NUM_LEDS;
+    }
+    return 0;
 }
 
+#if 0
 /* --------------------------------------------------------------------------------------------
  *                 ANIFUNC_FillNoise8()
  * --------------------------------------------------------------------------------------------
@@ -353,7 +648,7 @@ uint32_t ANI_DrawAnimationFrame(rgb24 *LedBuff)
  *
  * Returns:        
  */
-void ANIFUNC_FillNoise8(AniParms *Ap, AniType At)
+void ANIFUNC_FillNoise8(AniParms *Ap)
 {
     uint16_t x;
     uint16_t y;
@@ -366,11 +661,11 @@ void ANIFUNC_FillNoise8(AniParms *Ap, AniType At)
     static uint16_t yy = random16();
     static uint16_t zz = random16();
 #if SM_WIDTH > SM_HEIGHT
-    const uint32_t longestSide = SM_WIDTH;
-    uint8_t noise[SM_WIDTH][SM_WIDTH];
+    const uint32_t longestSide = LEDI_WIDTH;
+    uint8_t noise[LEDI_WIDTH][LEDI_WIDTH];
 #else
-    const uint32_t longestSide = SM_HEIGHT;
-    uint8_t noise[SM_HEIGHT][SM_HEIGHT];
+    const uint32_t longestSide = LEDI_HEIGHT;
+    uint8_t noise[LEDI_HEIGHT][LEDI_HEIGHT];
 #endif
 
     for (x= 0; x < longestSide; x++) {
@@ -382,8 +677,8 @@ void ANIFUNC_FillNoise8(AniParms *Ap, AniType At)
     }
     zz += Ap->speed;
 
-    for (x = 0; x < SM_WIDTH; x++) {
-        for (y = 0; y < SM_HEIGHT; y++) {
+    for (x = 0; x < LEDI_WIDTH; x++) {
+        for (y = 0; y < LEDI_HEIGHT; y++) {
             // We use the value at the (x,y) coordinate in the noise
             // array for our brightness, and the flipped value from (y,x)
             // for our pixel's hue.
@@ -405,7 +700,7 @@ void ANIFUNC_FillNoise8(AniParms *Ap, AniType At)
  *
  * Returns:        
  */
-void ANIFUNC_Glitter(AniParms *Ap, AniType At)
+void ANIFUNC_Glitter(AniParms *Ap)
 {
     uint32_t totNum;
     uint32_t i, j;
@@ -417,7 +712,7 @@ void ANIFUNC_Glitter(AniParms *Ap, AniType At)
         return;
     }
     
-    uint32_t numToChange = SM_NUM_LEDS / (Ap->p.trans.transTime / 1000) / Ap->fpsTarg;
+    uint32_t numToChange = LEDI_NUM_LEDS / (Ap->p.trans.transTime / 1000) / Ap->fpsTarg;
     numToChange += Ap->scale;
 
     maxItr = 0;
@@ -425,22 +720,22 @@ void ANIFUNC_Glitter(AniParms *Ap, AniType At)
     //Serial.printf("Numtochange %d\r\n", numToChange);
     for (i = 0; (i < numToChange) && (maxItr < numToChange * 2); i += numWritten - totNum - i) {
         maxItr++;
-        x = random16(SM_WIDTH);
-        y = random16(SM_HEIGHT);
+        x = random16(LEDI_WIDTH);
+        y = random16(LEDI_HEIGHT);
         pixNum = pXY(x,y);
-        for (j = 0; j < SM_NUM_LEDS; j++) {
+        for (j = 0; j < LEDI_NUM_LEDS; j++) {
 
-            if ((aniInfo.owners[pixNum % SM_NUM_LEDS] & ANI_TYPE_FREE_OFFSET)) {
+            if ((aniInfo.owners[pixNum % LEDI_NUM_LEDS] & ANI_TYPE_FREE_OFFSET)) {
                 /* Already changed this pix */
-                pixNum = pixNum == SM_NUM_LEDS - 1 ? 0 : pixNum + 1;
+                pixNum = pixNum == LEDI_NUM_LEDS - 1 ? 0 : pixNum + 1;
             } else {
                 //Serial.println("Found x,y");
-                y = pixNum / SM_WIDTH;
-                x = pixNum % SM_WIDTH;
+                y = pixNum / LEDI_WIDTH;
+                x = pixNum % LEDI_WIDTH;
                 break;
             }
         }
-        if (j == SM_NUM_LEDS) {
+        if (j == LEDI_NUM_LEDS) {
             Serial.println("Done");
             Ap->value = 1;
             return;
@@ -456,6 +751,7 @@ void ANIFUNC_Glitter(AniParms *Ap, AniType At)
 //    Serial.printf("printed %d. max iter %d\r\n", numWritten - totNum, maxItr);
 }
 
+#endif
 
 uint8_t const exp_gamma[256] =
 {0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,
@@ -483,110 +779,140 @@ uint8_t const exp_gamma[256] =
  *
  * Returns:        void
  */
-void ANIFUNC_PlazInt(AniParms *Ap, AniType At)
+void ANIFUNC_PlazInt(AniParms *Ap)
 {
     uint16_t x, y;
     uint16_t t;
     uint16_t t2;
     uint16_t t3;
     CRGB led;
+    AniPixel *currAniPix;
 
     Ap->counter++;
     t  = cubicwave8((33 * Ap->counter)/100); // time displacement
     t2 = cubicwave8((8 * Ap->counter)/100); // fiddle with these
     t3 = cubicwave8((15 * Ap->counter)/100); // to change looks
-    for (x = 0; x < SM_WIDTH; x++) {
-        for (y = 0; y < SM_HEIGHT; y++) {
-            //Calculate 3 seperate plasma waves, one for each color channel
-            led.r = cubicwave8(((x << 3) + (t >> 1) +
-                    cubicwave8((t2 + (y << 3)))));
-            led.g = cubicwave8(((y << 3) + t +
-                    cubicwave8(((t3 >> 2) + (x << 3)))));
-            led.b = triwave8(((y << 3) + t2 +
-                    triwave8((t + x + (led.g >> 2)))));
-            led.b = exp_gamma[led.b];
-            led.g = exp_gamma[led.g];
-            led.r = exp_gamma[led.r];
-            //led = applyGamma_video(led, 2.1);
-            writePixel(Ap, At, pXY(x, y), led);
-
-        }
-    }
-}
-
-/* --------------------------------------------------------------------------------------------
- *                 ANIFUNC_Rainbow()
- * --------------------------------------------------------------------------------------------
- * Description:    
- *
- * Parameters:     
- *
- * Returns:        
- */
-void ANIFUNC_Rainbow(AniParms *Ap, AniType At)
-{
-    // FastLED's built-in rainbow generator
-    CHSV   hsv;
-    CRGB   crgb;
-
-    hsv.hue = Ap->hue;
-    hsv.val = 100;
-    hsv.sat = Ap->maxBright;
-    for( int i = 0; i < SM_NUM_LEDS; ++i) {
-        crgb = hsv;
-        writePixel(Ap, At, i, crgb);
-        hsv.hue += Ap->speed;
-    }
-
-    Ap->hue += Ap->speed;
-}
-
-/* --------------------------------------------------------------------------------------------
- *                 ANIFUNC_Confetti()
- * --------------------------------------------------------------------------------------------
- * Description:    
- *
- * Parameters:     
- *
- * Returns:        
- */
-void ANIFUNC_Confetti(AniParms *Ap, AniType At)
-{
-    uint16_t written;
-    uint16_t i;
-    CRGB crgb = CHSV(Ap->hue + random8(64), 200, 255);
-
-    // Random colored speckles that blink in and fade smoothly
-    for (i = 0; i < SM_NUM_LEDS; i++) {
-        if (aniInfo.owners[i] & Ap->type) {
-            crgb.setRGB(aniInfo.ledBuff[i].red, aniInfo.ledBuff[i].green, aniInfo.ledBuff[i].blue);
-            //Serial.printf("Before crgb r,b,g (%d,%d,%d)\r\n", crgb.r, crgb.b, crgb.g);
-            crgb.nscale8(Ap->scale);
-            //Serial.printf("After crgb r,b,g (%d,%d,%d)\r\n", crgb.r, crgb.b, crgb.g);
-            writePixel(Ap, Ap->type, i, crgb);
-            if (!crgb) {
-                aniInfo.owners[i] &= 0x00FF;
+    for (x = 0; x < LEDI_WIDTH; x++) {
+        for (y = 0; y < LEDI_HEIGHT; y++) {
+            if ((currAniPix = ANI_CheckPixNum(pXY(x, y))) != 0) {
+                //Calculate 3 seperate plasma waves, one for each color channel
+                led.r = cubicwave8(((x << 3) + (t >> 1) +
+                        cubicwave8((t2 + (y << 3)))));
+                led.g = cubicwave8(((y << 3) + t +
+                        cubicwave8(((t3 >> 2) + (x << 3)))));
+                led.b = triwave8(((y << 3) + t2 +
+                        triwave8((t + x + (led.g >> 2)))));
+#if 1 /* Faster, more memory */
+                led.b = exp_gamma[led.b];
+                led.g = exp_gamma[led.g];
+                led.r = exp_gamma[led.r];
+#else
+                led = applyGamma_video(led, 2.1);
+#endif
+                ANI_WriteVerifiedPix(Ap, currAniPix, led);
             }
         }
     }
-    
-    written = numWritten;
-    i = random16(SM_NUM_LEDS);
-    crgb = CHSV(Ap->hue + random8(64), 200, 255);
-    writePixel(Ap, At, i, crgb);
-    if (numWritten > written) {
-        /* Assign that to new value */
-        aniInfo.owners[i] |= Ap->type;
+}
+
+/* --------------------------------------------------------------------------------------------
+ *                 ANIFUNC_RainbowIris()
+ * --------------------------------------------------------------------------------------------
+ * Description:    
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+void ANIFUNC_RainbowIris(AniParms *Ap)
+{
+    // FastLED's built-in rainbow generator
+    CHSV   hsvX, hsvY;
+    CRGB   crgb;
+    uint16_t x, y;
+    uint16_t scale = Ap->scale;
+
+    hsvX = Ap->hsv;
+    hsvY = hsvX;
+    for (x = 0; x < LEDI_WIDTH / 2; x++) {
+        if ((x % 3) == 0) {
+            scale++;
+        }
+        //hsvX.h += scale >> 2;
+        hsvY = hsvX;
+        for (y = 0; y < LEDI_HEIGHT / 2; y++) {
+            hsvY.h += scale >> 1;
+            crgb = hsvY;
+            ANI_WritePixel(Ap, pXY(x, y), crgb);
+            ANI_WritePixel(Ap, pXY(x, LEDI_HEIGHT - 1 - y), crgb);
+            ANI_WritePixel(Ap, pXY(LEDI_WIDTH - 1 - x, y), crgb);
+            ANI_WritePixel(Ap, pXY(LEDI_WIDTH - 1 - x, LEDI_HEIGHT - 1 - y), crgb);
+        }
     }
 
+    Ap->hsv.h += Ap->speed;
+}
+/* --------------------------------------------------------------------------------------------
+ *                 ANIFUNC_Confetti()
+ * --------------------------------------------------------------------------------------------
+ * Description: Pixels blink and fade out by randomly adding 1 pixel in a draw frame and reducing
+ *              pixels that have been drawn in previous frames until they are are blacked out.
+ *
+ * Parameters:  Ap - Pointer to AniParms data where:
+ *                   hsv: starting hue,sat,val
+ *                   scale: Defines how fast the pixel fades to 0. A higher scale value means
+ *                          the pixel fades slower.
+ *              At - Type of animation (Recommendation: ANI_TYPE_FOREGROUND)
+ *
+ * Returns:     void      
+ */
+void ANIFUNC_Confetti(AniParms *Ap)
+{
+    AniPixel *currAniPix;
+    AniPixel *nextAniPix;
+    CRGB crgb;
+    
+    //Serial.println("ANIFUNC_Confetti 1");
+    // Random colored speckles that blink in and fade smoothly
+    IterateListSafely(Ap->pixList, currAniPix, nextAniPix, AniPixel*) {
+        // Wrote to this in the past. Check if we still can
+        if (ANI_CheckPix(currAniPix)) {
+            crgb = currAniPix->color;
+            //Serial.printf("Before crgb r,b,g (%d,%d,%d)\r\n", crgb.r, crgb.b, crgb.g);
+            crgb.nscale8(Ap->scale);
+            //Serial.printf("After crgb r,b,g (%d,%d,%d)\r\n", crgb.r, crgb.b, crgb.g);
+            ANI_WriteVerifiedPix(Ap, currAniPix, crgb);
+            if (!crgb) {
+                // Pixel faded to black, so remove from list */
+                RemoveNode(&currAniPix->node);
+            }
+        } else {
+            // A higher layer animation wrote to this pixel. Since we lost the color
+            // value we wrote, we will just remove this from the list now.
+            RemoveNode(&currAniPix->node);
+        }
+    }
+    //Serial.println("ANIFUNC_Confetti 2");
+    if ((currAniPix = ANI_CheckPixNum(random16(LEDI_NUM_LEDS))) != 0) {
+        // Make sure this pixel is not already on a list. Adding it to a list
+        // (whether its the same list or different one), will corrupt the previous list.
+        if (!IsNodeUsed(&currAniPix->node)) {
+            crgb.setHue(Ap->hsv.hue + random8(64));
+            //Serial.println("ANIFUNC_Confetti 2.2");
+            ANI_WriteVerifiedPix(Ap, currAniPix, crgb);
+            InsertTail(&Ap->pixList, &currAniPix->node);
+        }
+    }
+
+    //Serial.println("ANIFUNC_Confetti 3");
 }
 #if 0
 
 void sinelon()
 {
     // a colored dot sweeping back and forth, with fading trails
-    fadeToBlackBy(leds, SM_NUM_LEDS, 5);
-    int pos = beatsin16(13, 0, SM_NUM_LEDS - 1);
+    fadeToBlackBy(leds, LEDI_NUM_LEDS, 5);
+    int pos = beatsin16(13, 0, LEDI_NUM_LEDS - 1);
     leds[pos] += CHSV(gHue, 255, 192);
 }
 
@@ -596,7 +922,7 @@ void bpm()
     uint8_t BeatsPerMinute = 62;
     CRGBPalette16 palette  = PartyColors_p;
     uint8_t beat           = beatsin8(BeatsPerMinute, 64, 255);
-    for (int i = 0; i < SM_NUM_LEDS; i++) { // 9948
+    for (int i = 0; i < LEDI_NUM_LEDS; i++) { // 9948
         leds[i] = ColorFromPalette(palette, gHue + (i * 2), beat - gHue + (i * 10));
     }
 }
@@ -604,14 +930,43 @@ void bpm()
 void juggle()
 {
     // eight colored dots, weaving in and out of sync with each other
-    fadeToBlackBy(leds, SM_NUM_LEDS, 5);
+    fadeToBlackBy(leds, LEDI_NUM_LEDS, 5);
     uint8_t dothue = 0;
     for (int i = 0; i < 8; i++) {
-        leds[beatsin16(i + 7, 0, SM_NUM_LEDS - 1)] |= CHSV(dothue, 200, 255);
+        leds[beatsin16(i + 7, 0, LEDI_NUM_LEDS - 1)] |= CHSV(dothue, 200, 255);
         dothue += 32;
     }
 }
 #endif
+
+// --------------------------------------------------------------------------
+//  Internal Functions
+// --------------------------------------------------------------------------
+
+/* --------------------------------------------------------------------------------------------
+ *                 AniWriteToBuffer()
+ * --------------------------------------------------------------------------------------------
+ * Description:   TODO this can be improved if we swap between two different lists. Items on
+ *                list are pixels that haven't been drawn yet. 
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+void AniWriteToBuffer(void)
+{
+    uint16_t i;
+    for (i = 0; i < LEDI_NUM_LEDS; i++) {
+        aniInfo.drawBuff[i] = LED_TYPE(aniInfo.pix[i].color);
+        if ((aniInfo.pix[i].crit & ANI_CRIT_PERSISTENT) == 0) {
+            if (aniInfo.pix[i].crit & ANI_CRIT_BELOW_ANY) {
+                aniInfo.pix[i].crit = ANI_CRIT_BELOW_LOW;
+            } else if (aniInfo.pix[i].crit & ANI_CRIT_ACTIVE_ANY) {
+                aniInfo.pix[i].crit = ANI_CRIT_LOW;
+            }
+        }
+    }
+}
 
 /* --------------------------------------------------------------------------------------------
  *                 AniSetInactive()
@@ -624,23 +979,32 @@ void juggle()
  */
 void AniSetInactive(AniPack *Ap)
 {
+    ListNode   *node;
+
+    // Remove animation from the active list
     RemoveNode(&Ap->node);
 
-    if (Ap->type & (ANI_TYPE_MAIN_OFFSET | ANI_TYPE_OLD_OFFSET)) {
-        Serial.println("benging main/old");
-        InsertTail(&aniInfo.mainWaitList, &Ap->node);
-        aniInfo.numMainWaiting++;
-    } else {
-        Serial.println("benging trans");
+    // Remove any held pixels if there are any
+    while(!IsListEmpty(&Ap->parms.pixList)) {
+        node = GetHead(&Ap->parms.pixList);
+        RemoveNode(node);
+    }
+
+    if (Ap->defaultLayer & (ANI_LAYER_TRANSITION)) {
+        //Serial.println("Deactivating trans animation");
         InsertTail(&aniInfo.transWaitList, &Ap->node);
         aniInfo.numTransWaiting++;
+    } else {
+        //Serial.println("Deactivating regular animation");
+        InsertTail(&aniInfo.mainWaitList, &Ap->node);
+        aniInfo.numMainWaiting++;
     }
 }
 
 /* --------------------------------------------------------------------------------------------
  *                 AniTransDone()
  * --------------------------------------------------------------------------------------------
- * Description:    Marks an transition type animation as complete
+ * Description:    Transitioning has completed
  *
  * Parameters:     
  *
@@ -650,7 +1014,6 @@ void AniTransDone()
 {
     AniPack  *aniPack;
     ListNode *nodeItr;
-    uint16_t  i;
 
     aniInfo.tranInProg = false;
 
@@ -659,19 +1022,8 @@ void AniTransDone()
     nodeItr = &aniInfo.activeList;
     while ((nodeItr = GetNextNode(nodeItr)) != &aniInfo.activeList) {
         aniPack = (AniPack*)nodeItr;
-        if (aniPack->type & ANI_TYPE_OLD_OFFSET) {
+        if (aniPack->currCriteria & ANI_CRIT_BELOW_ANY) {
             nodeItr = GetPriorNode(nodeItr);
-
-            /* Assign the "Main" type */
-            aniPack->type &= ~ANI_TYPE_OLD_OFFSET;
-            aniPack->type |= ANI_TYPE_MAIN_OFFSET;
-
-            if (aniPack->parms.type != 0) {
-                /* Need to check if any of these special types exists and change them to free */
-                for (i = 0; i < SM_NUM_LEDS; i++) {
-                    aniInfo.owners[i] &= ~aniPack->parms.type;
-                }
-            }
             AniSetInactive(aniPack);
         }
     }
@@ -691,91 +1043,3 @@ bool AniCheckTranDel(AniParms *Ap)
 {
     return (millis() > Ap->delay);
 }
-
-/* --------------------------------------------------------------------------------------------
- *                 writePixel()
- * --------------------------------------------------------------------------------------------
- * Description:    
- *
- * Parameters:     
- *
- * Returns:        
- */
-void writePixel(AniParms *Ap, AniType At, uint32_t PixNum, const rgb24 &RgbVal)
-{
-    AniType pixOwner = aniInfo.owners[PixNum];
-    if (PixNum >= SM_NUM_LEDS) {
-        //Serial.println("Overbounds!");
-        //PixNum = SM_NUM_LEDS - 1;
-        return;
-    }
-    //Serial.printf("owner at this pix %d is 0x%x\r\n", PixNum, aniInfo.owners[PixNum]);
-
-    switch(At) {
-    case ANI_TYPE_MASK:
-        if ((Ap->p.mask.maskType[PixNum] == At) &&
-            ((pixOwner == ANI_TYPE_FREE) ||
-             (pixOwner == ANI_TYPE_MASK))) {
-            goto write;
-        }
-        break;
-
-    case ANI_TYPE_FOREGROUND:
-    case ANI_TYPE_BACKGROUND:
-        if (pixOwner == ANI_TYPE_FREE) {
-            goto write;
-        } else if ((pixOwner == ANI_TYPE_OLD_FREE) && !aniInfo.tranInProg) {
-            aniInfo.owners[PixNum] = ANI_TYPE_FREE;
-            goto write;
-        }
-        break;
-
-    case ANI_TYPE_OLD_FOREGROUND:
-    case ANI_TYPE_OLD_BACKGROUND:
-        if ((pixOwner == ANI_TYPE_OLD_FREE)) {
-            goto write;
-        }
-        break;
-
-        case ANI_TYPE_TRANS_SWIPE:
-        if (pixOwner != ANI_TYPE_FREE) {
-            aniInfo.owners[PixNum] = ANI_TYPE_FREE;
-            goto write;
-        }
-        break;
-
-    case ANI_TYPE_TRANS_TRANS:
-        if (pixOwner != ANI_TYPE_FREE) {
-            aniInfo.owners[PixNum] = ANI_TYPE_FREE;
-            goto skip;
-        }
-        break;
-
-    case ANI_TYPE_SPECIAL_1:
-        if ((RgbVal.blue == 0) &&
-            (RgbVal.green == 0) &&
-            (RgbVal.red == 0)) {
-            aniInfo.owners[PixNum] = ANI_TYPE_FREE;
-            goto skip;
-        } else {
-            aniInfo.owners[PixNum] = ANI_TYPE_SPECIAL_1;
-            goto write;
-        }
-
-    default:
-        if (pixOwner & At) {
-            goto write;
-        }
-        break;
-    }
-
-    /* Don't write the pixel */
-    return;
-
-write:
-    aniInfo.ledBuff[PixNum] = RgbVal;
-skip:
-    //aniInfo.drawn[*PixIndx] = PixNum; /* commented because I don't think i need this anymore after optimizations. */
-    numWritten++;
-}
-

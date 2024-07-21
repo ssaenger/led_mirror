@@ -52,13 +52,14 @@ class MtxMgr
 {
 public:
     static MtxMgr &getInstance();
-    static void NETMGR_LineSwipeR(AniParms *Ap, AniType At);
-    static void NETMGR_LineSwipeL(AniParms *Ap, AniType At);
-    static void NETMGR_LineSwipeU(AniParms *Ap, AniType At);
-    static void NETMGR_LineSwipeD(AniParms *Ap, AniType At);
+    #if 0
+    static void NETMGR_LineSwipeR(AniParms *Ap);
+    static void NETMGR_LineSwipeL(AniParms *Ap);
+    static void NETMGR_LineSwipeU(AniParms *Ap);
+    static void NETMGR_LineSwipeD(AniParms *Ap);
 
-    static void NETMGR_CircleCenter(AniParms *Ap, AniType At);
-
+    static void NETMGR_CircleCenter(AniParms *Ap);
+#endif
     /* Init function */
     bool syncInit();
     void run();
@@ -76,7 +77,8 @@ private:
     ~MtxMgr();
     MtxMgrFlags flags;
     uint8_t     val;
-    AniPack aniPackArray[20];
+    AniPack    *aniPackArray;
+    uint8_t     aniPackNum;
 };
 
 #endif /* _MTX_MGR_HPP_ */

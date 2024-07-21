@@ -15,6 +15,7 @@
 #ifndef _OVERIDE_H_
 #define _OVERIDE_H_
 
+#define IS_TEENSY_BOARD
 
 /* MTXMGR overrides */
 
@@ -25,8 +26,8 @@
 
 /* smartmtxconfig.h */
 //#define SM_COLOR_DEPTH 24
-#define SM_HEIGHT 96
-#define SM_WIDTH 128
+#define LEDI_HEIGHT 96
+#define LEDI_WIDTH 128
 //#define SM_REFRESH_DEPTH 36
 
 /* audiosync.hpp */

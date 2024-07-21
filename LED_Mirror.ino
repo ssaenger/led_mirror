@@ -2,7 +2,9 @@
 //#include "inc/netmgr.hpp"
 #include "inc/overide.h"
 #include <Arduino.h>
+#ifdef IS_TEENSY_BOARD
 #include <AsyncWebServer_Teensy41.h> /* Only to be included once here to avoid multiple redefinitions */
+#endif
 
 void setup()
 {
@@ -14,7 +16,7 @@ void setup()
     while (!Serial  && millis() < 5000 )
         ;
 
-    delay(200);
+    delay(2000);
 
     Serial.printf("\nInitializing LED_Mirror Project on %s...\n\r", BOARD_NAME);
 

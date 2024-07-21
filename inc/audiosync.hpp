@@ -84,8 +84,9 @@ void AS_Init();
 void AS_CalcFftBins(uint16_t Bands);
 void AS_CalcLevelThresh(float MaxLevel, float DynamicRange, float LinearBlend);
 
-void AS_PlotFftTop(AniParms *Ap, AniType At);
-void AS_PlotFftBottom(AniParms *Ap, AniType At);
-void AS_PlotFftMid(AniParms *Ap, AniType At);
+void AS_PlotFftTop(AniParms *Ap);
+void AS_PlotFftBottom(AniParms *Ap);
+void AS_PlotFftMid(AniParms *Ap);
+void AS_RainbowIris(AniParms *Ap);
 
 #endif /* _AUDIOSYNC_HPP_ */

@@ -24,18 +24,20 @@
  */
 
 // FFT definitions. Audio comes from computer through USB
-static AudioInputUSB       usb1;
-static AudioOutputI2S      i2s1; // Needed
-static AudioMixer4         mixer1;
-static AudioAnalyzeFFT1024 fft1024;
+static AudioInputUSB        usb1;
+static AudioOutputI2S       i2s1; // Needed
+static AudioMixer4          mixer1;
+static AudioAnalyzePeak     peak;
+static AudioAnalyzeFFT1024  fft1024;
 static AudioConnection patchCord1(usb1, 0, mixer1, 0);
 static AudioConnection patchCord2(usb1, 1, mixer1, 1);
 static AudioConnection patchCord3(mixer1, fft1024);
+static AudioConnection patchCord4(mixer1, peak);
 
-static uint16_t fftBins[SM_WIDTH];
-static float levelThreshVert[SM_HEIGHT];
-static float levelThreshHoriz[SM_WIDTH];
-static uint8_t shownBinLevel[SM_WIDTH];
+static uint16_t fftBins[LEDI_WIDTH];
+static float levelThreshVert[LEDI_HEIGHT];
+//static float levelThreshHoriz[LEDI_WIDTH];
+static uint8_t shownBinLevel[LEDI_WIDTH];
 
 /* --------------------------------------------------------------------------------------------
  *  PROTOTYPES
@@ -64,11 +66,10 @@ void AS_Init()
 {
     uint16_t i;
     AudioMemory(18);
-    AS_CalcFftBins(SM_WIDTH);
+    AS_CalcFftBins(LEDI_WIDTH);
     AS_CalcLevelThresh(AS_MAX_LEVEL, AS_DYNAMIC_RANGE, AS_LINEAR_BLEND);
-    for (i = 0; i < SM_WIDTH; i += 2) {
+    for (i = 0; i < LEDI_WIDTH; i++) {
         shownBinLevel[i] = 0;
-        shownBinLevel[i + 1] = 0;
     }
 }
 
@@ -88,25 +89,25 @@ void AS_CalcFftBins(uint16_t Bands)
     float e, n;
     int b, count = 0, d;
 
-    if ((Bands > SM_WIDTH) || (Bands < 1)) {
+    if ((Bands > LEDI_WIDTH) || (Bands < 1)) {
         Serial.println("Invalid Bands level");
         return;
     }
 
-    e = FindE(Bands, AS_FFT_BIN_COUNT);  // Find calculated E value
+    e = FindE(Bands, AS_FFT_BIN_COUNT + 20);  // Find calculated E value
     if (e) {                             // If a value was returned continue
         Serial.printf("E = %4.4f\n", e); // Print calculated E value
         for (b = 0; b < Bands; b++) {    // Test and print the bins from the calculated E
             n = pow(e, b);
             d = int(n + 0.5);
-#if PRINT_FFT_DEBUG == 1
-            Serial.printf("%4d ", b); // Print low bin
-#endif /* PRINT_FFT_DEBUG == 1 */
             count += d - 1;
             count++;
             fftBins[b] = count - 1;
 #if PRINT_FFT_DEBUG == 1
-            Serial.printf("%4d\r\n", fftBins[b]); // Print high bin
+            Serial.printf("band: %4d -> # of bins %4d. Total bins: %4d -> %fHz\r\n", b,
+                                                        (b == 0 ? fftBins[b] : fftBins[b] - fftBins[b - 1]),
+                                                        fftBins[b],
+                                                        (43.0664) * fftBins[b]); // Print high bin
 #endif /* PRINT_FFT_DEBUG == 1 */
         }
         if (fftBins[b - 1] > 511) { fftBins[b - 1] = 511; }
@@ -128,7 +129,7 @@ void AS_CalcFftBins(uint16_t Bands)
  */
 void AS_CalcLevelThresh(float MaxLevel, float DynamicRange, float LinearBlend)
 {
-    uint8_t x, y;
+    uint8_t y;
     float n, logLevel, linearLevel;
 
 #if PRINT_FFT_DEBUG == 1
@@ -142,37 +143,34 @@ void AS_CalcLevelThresh(float MaxLevel, float DynamicRange, float LinearBlend)
 #endif /* PRINT_FFT_DEBUG == 1 */
 
     // Compute vertical values (for when LED_state is showing bars going up-down)
-    for (y = 0; y < SM_HEIGHT; y++) {
-        n                                  = (float)y / (float)(SM_HEIGHT - 1);
+    for (y = 0; y < LEDI_HEIGHT; y++) {
+        n                                  = (float)y / (float)(LEDI_HEIGHT - 1);
         logLevel                           = pow10f(n * -1.0 * (DynamicRange / 20.0));
         linearLevel                        = 1.0 - n;
         linearLevel                        = linearLevel * LinearBlend;
         logLevel                           = logLevel * (1.0 - LinearBlend);
-        levelThreshVert[SM_HEIGHT - y - 1] = (logLevel + linearLevel) * MaxLevel;
+        levelThreshVert[LEDI_HEIGHT - y - 1] = (logLevel + linearLevel) * MaxLevel;
 #if PRINT_FFT_DEBUG == 1
-        Serial.print(SM_HEIGHT - y - 1);
-        Serial.print(": ");
-        Serial.print(levelThreshVert[SM_HEIGHT - y - 1], 5);
-        Serial.print("\r\n");
+        Serial.printf("Thresh: y %2d: %f\n\r", LEDI_HEIGHT - y - 1,
+                    levelThreshVert[LEDI_HEIGHT - y - 1]);
 #endif /* PRINT_FFT_DEBUG == 1 */
     }
-
+#if 0
     // Compute horizontal values (for when LED_state is showing bars going
     // side-to-side)
-    for (x = 0; x < SM_WIDTH; x++) {
-        n                                  = (float)x / (float)(SM_WIDTH - 1);
+    for (x = 0; x < LEDI_WIDTH; x++) {
+        n                                  = (float)x / (float)(LEDI_WIDTH - 1);
         logLevel                           = pow10f(n * -1.0 * (DynamicRange / 20.0));
         linearLevel                        = 1.0 - n;
         linearLevel                        = linearLevel * LinearBlend;
         logLevel                           = logLevel * (1.0 - LinearBlend);
-        levelThreshHoriz[SM_WIDTH - x - 1] = (logLevel + linearLevel) * MaxLevel;
+        levelThreshHoriz[LEDI_WIDTH - x - 1] = (logLevel + linearLevel) * MaxLevel;
 #if PRINT_FFT_DEBUG == 1
-        Serial.print(SM_WIDTH - x - 1);
-        Serial.print(": ");
-        Serial.print(levelThreshHoriz[SM_WIDTH - x - 1], 5);
-        Serial.print("\r\n");
+        Serial.printf("Thresh: x %2d: %f\n\r", LEDI_WIDTH - x - 1,
+                    levelThreshHoriz[LEDI_WIDTH - x - 1]);
 #endif /* PRINT_FFT_DEBUG == 1 */
     }
+#endif
 }
 
 /* --------------------------------------------------------------------------------------------
@@ -184,59 +182,65 @@ void AS_CalcLevelThresh(float MaxLevel, float DynamicRange, float LinearBlend)
  *
  * Returns:
  */
-void AS_PlotFftTop(AniParms *Ap, AniType At)
+void AS_PlotFftTop(AniParms *Ap)
 {
     float level;
     int16_t x, y;
     uint16_t prevFreqBin;
     uint8_t i;
+    uint8_t j, w;
+    uint8_t hue;
+    uint16_t speed;
 
-    CHSV hsv;
+    CHSV hsvX;
+    CHSV hsvY;
     CRGB crgb;
     const CRGB crgbBlack = CRGB::Black;
 
-    hsv.hue = Ap->hue;
-    hsv.val = 255;
-    hsv.sat = Ap->maxBright;
-    crgb = hsv;
+    Ap->counter = (Ap->counter >= Ap->fpsTarg) ? 0 : Ap->counter + Ap->scale;
+    if (Ap->counter == 0) {
+        Ap->hsv.hue += 1;
+    }
+    hue = Ap->hsv.h;
+    hsvX = Ap->hsv;
+    hsvY = hsvX;
+    speed = Ap->speed;
+    w = ((Ap->mod & ANI_MOD_4) == ANI_MOD_4) ? Ap->size : 1;
 
     if (fft1024.available()) {
-        Ap->hue += Ap->speed;
 
         prevFreqBin = 0;
-        for (x = 0; x < SM_WIDTH; x++) {
+        for (x = 0; x < LEDI_WIDTH; x += w) {
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
-            if (Ap->mod & ANI_MOD_2) {
-                hsv.hue = Ap->hue + x;
-                crgb = hsv;
-            } else {
-                if (Ap->mod & ANI_MOD_3) {
-                    /* Overide max level if previous value was greater */
-                    level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
-                }
-                hsv.hue = Ap->hue;
-                crgb = hsv;
+            if (Ap->mod & ANI_MOD_3) {
+                /* Overide max level if previous value was greater */
+                level = max(levelThreshVert[((shownBinLevel[x] >= 3) ? shownBinLevel[x] - 3 : 0)], level);
             }
+
+            if (Ap->mod & ANI_MOD_2) {
+                hsvX.hue = hue + (x * speed);
+            }
+            crgb = hsvX;
             /* First row is always written */
-            writePixel(Ap, At, pXY(x, 0), crgb);
-            for (y = 1; y < SM_HEIGHT; y++) {
+            //ANI_WritePixel(Ap, pXY(x, 0), crgb);
+            for (j = 0; j < w; j++) { ANI_WritePixel(Ap, pXY(x + j, 0), crgb); }
+            for (y = 1; y < LEDI_HEIGHT; y++) {
 
                 if (level >= levelThreshVert[y]) {
                     if (Ap->mod & ANI_MOD_1) {
-                        hsv.hue = Ap->hue + y;
-                        crgb = hsv;
+                        hsvY.hue = hsvX.hue + ((y) * speed);
                     }
-                    if (x == 0) {
-                        //Serial.printf("writing to y = %d\n\r", y);
-                    }
-                    writePixel(Ap, At, pXY(x, y), crgb);
+                    crgb = hsvY;
+                    //ANI_WritePixel(Ap, pXY(x, y), crgb);
+                    for (j = 0; j < w; j++) { ANI_WritePixel(Ap, pXY(x + j, y), crgb); }
                 } else {
                     /* Black out this Pixel. All pixels above are already blacked out so exit loop */
-                        /* Need to black out all remain pixels since the last fft draw */
+                    /* Need to black out all remain pixels since the last fft draw */
                     for (i = y; i <= shownBinLevel[x]; i++) {
-                        writePixel(Ap, At, pXY(x, i), crgbBlack);
+                        //ANI_WritePixel(Ap, pXY(x, i), crgbBlack);
+                        for (j = 0; j < w; j++) { ANI_WritePixel(Ap, pXY(x + j, i), crgbBlack); }
                     }
                     break;
                 }
@@ -269,26 +273,25 @@ void AS_PlotFftTop(AniParms *Ap, AniType At)
  *
  * Returns:     void
  */
-void AS_PlotFftBottom(AniParms *Ap, AniType At)
+void AS_PlotFftBottom(AniParms *Ap)
 {
     float level;
     int16_t x, y, i;
     uint16_t prevFreqBin;
+    uint8_t hue;
 
     CHSV hsv;
     CRGB crgb;
     const CRGB crgbBlack = CRGB::Black;
 
-    hsv.hue = Ap->hue;
-    hsv.val = 255;
-    hsv.sat = Ap->maxBright;
-    crgb = hsv;
+    hue = Ap->hsv.h;
+    hsv = Ap->hsv;
 
     if (fft1024.available()) {
-        Ap->hue += Ap->speed;
+        hue += Ap->speed;
 
         prevFreqBin = 0;
-        for (x = 0; x < SM_WIDTH; x++) {
+        for (x = 0; x < LEDI_WIDTH; x++) {
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
@@ -298,26 +301,26 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
             }
 
             if (Ap->mod & ANI_MOD_2) {
-                hsv.hue = Ap->hue + x;
+                hsv.hue = hue + x;
             } else {
-                hsv.hue = Ap->hue;
+                hsv.hue = hue;
             }
             crgb = hsv;
             /* First row is always written */
-            writePixel(Ap, At, pXY_BL(x, 0), crgb);
-            for (y = 1; y < SM_HEIGHT; y++) {
+            ANI_WritePixel(Ap, pXY_BL(x, 0), crgb);
+            for (y = 1; y < LEDI_HEIGHT; y++) {
 
                 if (level >= levelThreshVert[y]) {
                     if (Ap->mod & ANI_MOD_1) {
-                        hsv.hue = Ap->hue + y;
+                        hsv.hue = hue + y;
                         crgb = hsv;
                     }
-                    writePixel(Ap, At, pXY_BL(x, y), crgb);
+                    ANI_WritePixel(Ap, pXY_BL(x, y), crgb);
                 } else {
                     /* Black out this Pixel. All pixels above are already blacked out so exit loop */
                         /* Need to black out all remain pixels since the last fft draw */
                     for (i = y; i <= shownBinLevel[x]; i++) {
-                        writePixel(Ap, At, pXY_BL(x, i), crgbBlack);
+                        ANI_WritePixel(Ap, pXY_BL(x, i), crgbBlack);
                     }
                     break;
                 }
@@ -355,12 +358,13 @@ void AS_PlotFftBottom(AniParms *Ap, AniType At)
  *
  * Returns:     void
  */
-void AS_PlotFftMid(AniParms *Ap, AniType At)
+void AS_PlotFftMid(AniParms *Ap)
 {
     float level;
     int16_t x, y, i;
     uint16_t prevFreqBin;
     uint16_t offset, speed;
+    uint8_t hue;
 
     CHSV hsvX;
     CHSV hsvY;
@@ -370,20 +374,18 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
     // Roughly Ap->hue goes up by 1 every Ap->scale per second
     Ap->counter = (Ap->counter >= Ap->fpsTarg) ? 0 : Ap->counter + Ap->scale;
     if (Ap->counter == 0) {
-        Ap->hue += 1;
+        Ap->hsv.hue += 1;
     }
+    hue = Ap->hsv.h;
     speed = Ap->speed;
     offset = Ap->offset;
-    hsvX.hue = Ap->hue;
-    hsvX.val = Ap->maxBright;
-    hsvX.sat = 0xFF;
+    hsvX = Ap->hsv;
     hsvY = hsvX;
-    crgb = hsvX;
 
     if (fft1024.available()) {
 
         prevFreqBin = 0;
-        for (x = 0; x < SM_WIDTH; x++) {
+        for (x = 0; x < LEDI_WIDTH; x++) {
             //Serial.printf("Reading %d, %d\r\n",prevFreqBin, fftBins[x]);
             level = fft1024.read(prevFreqBin, fftBins[x]);
 
@@ -393,18 +395,18 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
             }
 
             if (Ap->mod & ANI_MOD_2) {
-                hsvX.hue = Ap->hue + (x * speed);
+                hsvX.hue = hue + (x * speed);
             }
             crgb = hsvX;
 
             // Mid 2 rows are always on
-            writePixel(Ap, At, pXY(x, SM_HEIGHT / 2), crgb);
-            writePixel(Ap, At, pXY_BL(x, SM_HEIGHT / 2), crgb);
-            for (y = 1; (y < (offset + 1)) && (y < SM_HEIGHT / 2) ; y++) {
-                writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2), crgbBlack);
-                writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2), crgbBlack);
+            ANI_WritePixel(Ap, pXY(x, LEDI_HEIGHT / 2), crgb);
+            ANI_WritePixel(Ap, pXY_BL(x, LEDI_HEIGHT / 2), crgb);
+            for (y = 1; (y < (offset + 1)) && (y < LEDI_HEIGHT / 2) ; y++) {
+                ANI_WritePixel(Ap, pXY(x, y + LEDI_HEIGHT / 2), crgbBlack);
+                ANI_WritePixel(Ap, pXY_BL(x, y + LEDI_HEIGHT / 2), crgbBlack);
             }
-            for (y = 1; y < SM_HEIGHT / 2 - offset; y++) {
+            for (y = 1; y < LEDI_HEIGHT / 2 - offset; y++) {
 
                 if (level >= levelThreshVert[y * 2 + offset]) {
                     if (Ap->mod & ANI_MOD_1) {
@@ -412,12 +414,12 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
                     }
                     crgb = hsvY;
 
-                    writePixel(Ap, At, pXY(x, y + SM_HEIGHT / 2 + offset), crgb);
-                    writePixel(Ap, At, pXY_BL(x, y + SM_HEIGHT / 2 + offset), crgb);
+                    ANI_WritePixel(Ap, pXY(x, y + LEDI_HEIGHT / 2 + offset), crgb);
+                    ANI_WritePixel(Ap, pXY_BL(x, y + LEDI_HEIGHT / 2 + offset), crgb);
                 } else {
                     for (i = y; i <= shownBinLevel[x]; i++) {
-                        writePixel(Ap, At, pXY(x, i + SM_HEIGHT / 2 + offset), crgbBlack);
-                        writePixel(Ap, At, pXY_BL(x, i + SM_HEIGHT / 2 + offset), crgbBlack);
+                        ANI_WritePixel(Ap, pXY(x, i + LEDI_HEIGHT / 2 + offset), crgbBlack);
+                        ANI_WritePixel(Ap, pXY_BL(x, i + LEDI_HEIGHT / 2 + offset), crgbBlack);
                     }
                     break;
                 }
@@ -428,6 +430,58 @@ void AS_PlotFftMid(AniParms *Ap, AniType At)
     }
 }
 
+/* --------------------------------------------------------------------------------------------
+ *                 AS_RainbowIris()
+ * --------------------------------------------------------------------------------------------
+ * Description:    
+ *
+ * Parameters:     
+ *
+ * Returns:        
+ */
+void AS_RainbowIris(AniParms *Ap)
+{
+    // FastLED's built-in rainbow generator
+    CHSV   hsvX, hsvY;
+    CRGB   crgb;
+    uint16_t x, y;
+    uint16_t scale = Ap->scale;
+    float  peakVal = 0;
+    uint8_t peakU8 = 0;
+
+    if (peak.available()) {
+        hsvX = Ap->hsv;
+        hsvY = hsvX;
+        peakVal = peak.read();
+        peakU8 = peakVal * 10.0;
+
+        for (x = 0; x < LEDI_WIDTH / 2; x++) {
+            if ((x % 3) == 0) {
+                scale++;
+            }
+            //hsvX.h += scale >> 2;
+            hsvY = hsvX;
+            for (y = 0; y < LEDI_HEIGHT / 2; y++) {
+                if ((y % 3) == 0) {
+                    hsvY.h += scale;
+                }                
+                crgb = hsvY;
+                ANI_WritePixel(Ap, pXY(x, y), crgb);
+                ANI_WritePixel(Ap, pXY(x, LEDI_HEIGHT - 1 - y), crgb);
+                ANI_WritePixel(Ap, pXY(LEDI_WIDTH - 1 - x, y), crgb);
+                ANI_WritePixel(Ap, pXY(LEDI_WIDTH - 1 - x, LEDI_HEIGHT - 1 - y), crgb);
+            }
+        }
+    }
+    EVERY_N_MILLISECONDS(40) {
+        Serial.println(peakU8);
+        if (peakU8 < 1) {
+            Ap->hsv.h += 1;    
+        } else {
+            Ap->hsv.h += peakU8 << 1;
+        }
+    }
+}
 
 /* --------------------------------------------------------------------------------------------
  *  PRIVATE FUNCTIONS

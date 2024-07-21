@@ -26,7 +26,6 @@ int IsNodeOnList(ListNode *List, ListNode *Node)
 {
     ListNode *nodeItr;
     int       loc = 0;
-
     if (!IsNodeUsed(Node)) {
         return 0;
     }
@@ -37,6 +36,5 @@ int IsNodeOnList(ListNode *List, ListNode *Node)
             break;
         }
     }
-
     return loc;
 }
