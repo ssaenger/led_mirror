@@ -107,7 +107,7 @@ bool MtxMgr::syncInit()
     //matrix.setRefreshRate(60);
     matrix.addLayer(&backgroundLayer);
     //matrix.addLayer(&foregroundLayer);
-    matrix.addLayer(&scrollingLayer);
+    //matrix.addLayer(&scrollingLayer);
     matrix.begin();
     delay(10);
 
@@ -121,10 +121,14 @@ bool MtxMgr::syncInit()
         Serial.println("Can't initialize ANI_Init");
         return false;
     }
-    if (!GIFDEC_Init()) {
-        // TODO: prevent adding gif animation
-        Serial.println("Could not initialize gif");
+    if (!ANIMAX_Init()) {
+        Serial.println("Could not animartrix");
+        return false;
     }
+    //if (!GIFDEC_Init()) {
+    //    // TODO: prevent adding gif animation
+    //    Serial.println("Could not initialize gif");
+    //}
 
     //Serial.printf("Before ANICOMP_Init() 0x%x.\n\r", animations);
     aniPackNum = ANICOMP_NUM_ANIMATIONS;
@@ -139,7 +143,7 @@ bool MtxMgr::syncInit()
         ANI_RegisterAnimation(&animations[i], animations[i].defaultLayer);
 
     }
-    AS_Init();
+    //AS_Init();
     //Serial.printf("After ANI_RegisterAnimation() %d.\n\r", aniPackNum);
     //ANI_AddNextAnimation(&animations[3]);
     //if (!ANI_AddNextAnimation(&animations[0], 0)) {
@@ -148,16 +152,19 @@ bool MtxMgr::syncInit()
         Serial.println("Could not add animation!");
         return false;
     }
-    */
     if (!ANI_AddNextAnimationByFuncP(AS_PlotFftTop, 0)) {
         Serial.println("Could not add animation!");
         return false;
     }
-    if (!ANI_AddNextAnimationByFuncP(GIFDEC_Play, 0)) {
+    */
+    //if (!ANI_AddNextAnimationByFuncP(GIFDEC_Play, 0)) {
+    //    Serial.println("Could not add animation!");
+    //    return false;
+    //}
+    if (!ANI_AddNextAnimationByFuncP(Animax_HotBlob, 0)) {
         Serial.println("Could not add animation!");
         return false;
     }
-    
     
 
     ANI_SwapAnimation(false);
@@ -177,9 +184,8 @@ bool MtxMgr::syncInit()
  */
 void MtxMgr::run()
 {
-#if 0
+#if 1
     static int val = 0;
-    static int indx = 0;
 #endif
     static uint16_t pixCount = 0;
 #if 0
@@ -229,17 +235,36 @@ void MtxMgr::run()
         }
         matrix.countFPS();      // print the loop() frames per second to Serial
     }
-#if 0
-    EVERY_N_SECONDS(7) {
-        val = (val + 1) % 2;
-        indx = (indx + 1) % 8;
-        Serial.printf("Swapping!! indx = %d\n\r", indx);
-        if (val == 1) {
-            if (!ANI_AddNextAnimationByFuncP(AS_PlotFftBottom, 0)) {
+#if 1
+    EVERY_N_SECONDS(10) {
+        val = (val + 1) % 7;
+        Serial.printf("Swapping!! val = %d\n\r", val);
+        if (val == 0) {
+            if (!ANI_AddNextAnimationByFuncP(Animax_HotBlob, 0)) {
                 Serial.println("Could not add animation!");
             }
-        } else if (val == 0) {
-            if (!ANI_AddNextAnimationByFuncP(AS_PlotFftMid, 0)) {
+        } else if (val == 1) {
+            if (!ANI_AddNextAnimationByFuncP(ANIMAX_Rings, 0)) {
+                Serial.println("Could not add animation!");
+            }
+        } else if (val == 2) {
+            if (!ANI_AddNextAnimationByFuncP(ANIMAX_Scaledemo1, 0)) {
+                Serial.println("Could not add animation!");
+            }
+        } else if (val == 3) {
+            if (!ANI_AddNextAnimationByFuncP(ANIMAX_Yves, 0)) {
+                Serial.println("Could not add animation!");
+            }
+        } else if (val == 4) {
+            if (!ANI_AddNextAnimationByFuncP(ANIMAX_Spiralus, 0)) {
+                Serial.println("Could not add animation!");
+            }
+        } else if (val == 5) {
+            if (!ANI_AddNextAnimationByFuncP(ANIMAX_Caleido1, 0)) {
+                Serial.println("Could not add animation!");
+            }
+        } else if (val == 6) {
+            if (!ANI_AddNextAnimationByFuncP(ANIMAX_Spiralus2, 0)) {
                 Serial.println("Could not add animation!");
             }
         }

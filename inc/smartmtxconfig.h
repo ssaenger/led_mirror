@@ -58,7 +58,7 @@
  * to 48: 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48.  On ESP32: 24, 36, 48
  */
 #ifndef SM_REFRESH_DEPTH
-#define SM_REFRESH_DEPTH 36
+#define SM_REFRESH_DEPTH 24
 #endif /* SM_REFRESH_DEPTH */
 
 /* --------------------------------------------------------------------------------------------

@@ -44,7 +44,6 @@ static AniCriteria currAc;
  */
 static void AniSetInactive(AniPack *Ap);
 static void AniTransDone();
-static bool AniCheckTranDel(AniParms *Ap);
 
 /* --------------------------------------------------------------------------------------------
  *  PUBLIC FUNCTIONS
@@ -201,15 +200,12 @@ bool ANI_UnregisterAnimation(AniPack *Ap, bool Force)
  */
 bool ANI_AddNextAnimation(AniPack *Ap, AniLayer OverrideLayer)
 {
-    Serial.println("ANI_AddNextAnimation 1");
     if (IsNodeOnList(&aniInfo.transWaitList, &Ap->node)) {
         RemoveNode(&Ap->node);
         aniInfo.numTransWaiting--;
-        Serial.println("ANI_AddNextAnimation 2");
     } else if (IsNodeOnList(&aniInfo.mainWaitList, &Ap->node)) {
         RemoveNode(&Ap->node);
         aniInfo.numMainWaiting--;
-        Serial.println("ANI_AddNextAnimation 3");
     } else {
         return false;
     }
@@ -217,16 +213,13 @@ bool ANI_AddNextAnimation(AniPack *Ap, AniLayer OverrideLayer)
     Serial.printf("ANI_AddNextAnimation: OverrideLayer 0x%x, Ap->defaultLayer 0x%x\r\n",
                     OverrideLayer, Ap->defaultLayer);
     if (OverrideLayer > ANI_LAYER_UNASSIGNED) {
-        Serial.println("ANI_AddNextAnimation 3.1");
         Ap->currCriteria = (AniCriteria)OverrideLayer;
     } else {
-        Serial.println("ANI_AddNextAnimation 3.2");
         Ap->currCriteria = (AniCriteria)Ap->defaultLayer;
     }
 
     /* Insert into queue list */
     InsertTail(&aniInfo.queueList, &Ap->node);
-    Serial.printf("ANI_AddNextAnimation 4. Ap->currCriteria == 0x%x\n\r", Ap->currCriteria);
 
     return true;
 }
@@ -282,7 +275,7 @@ found:
 
     /* Insert into queue list */
     MoveNodeBefore(&aniInfo.queueList, &ap->node);
-    Serial.printf("ANI_AddNextAnimation 4. Ap->currCriteria == 0x%x\n\r", ap->currCriteria);
+    //Serial.printf("ANI_AddNextAnimation 4. Ap->currCriteria == 0x%x\n\r", ap->currCriteria);
 
     return true;
 }
@@ -308,7 +301,7 @@ void ANI_SwapAnimation(bool UseBlending)
 
     /* Step 1: Check if any trans animations are present in the queue list */
     IterateList(aniInfo.queueList, aniPack, AniPack *) {
-        Serial.println("ANI_SwapAnimation: iter step 1");
+        //Serial.println("ANI_SwapAnimation: iter step 1");
         if (aniPack->currCriteria & ANI_CRIT_TRANSITION) {
             if (UseBlending) {
                 AniSetInactive(aniPack);
@@ -321,7 +314,7 @@ void ANI_SwapAnimation(bool UseBlending)
     }
 
     /* Step 2: Set active animation criteria to below normal */
-    Serial.println("ANI_SwapAnimation: step 2");
+    //Serial.println("ANI_SwapAnimation: step 2");
     if (transPresent) {
         //Serial.println("ANI_SwapAnimation: transpresent");
         for (i = 0; i < LEDI_NUM_LEDS; i++) {
@@ -332,7 +325,7 @@ void ANI_SwapAnimation(bool UseBlending)
          */
         nodeItr = &aniInfo.activeList;
         while ((nodeItr = GetNextNode(nodeItr)) != &aniInfo.activeList) {
-            Serial.println("ANI_SwapAnimation: 1");
+            //Serial.println("ANI_SwapAnimation: 1");
             aniPack = (AniPack*)nodeItr;
             if (aniPack->currCriteria == ANI_CRIT_TRANSITION) {
                 nodeItr = GetPriorNode(nodeItr); /* Get prior node to prevent breaking list */
@@ -346,7 +339,7 @@ void ANI_SwapAnimation(bool UseBlending)
         }
     } else {
         while (!IsListEmpty(&aniInfo.activeList)) {
-            Serial.println("ANI_SwapAnimation: 1");
+            //Serial.println("ANI_SwapAnimation: 1");
             aniPack = (AniPack*)GetHead(&aniInfo.activeList);
             AniSetInactive(aniPack);
         }
@@ -360,7 +353,7 @@ void ANI_SwapAnimation(bool UseBlending)
     aniInfo.fpsTarg = 0;
     while (!IsListEmpty(&aniInfo.queueList)) {
         aniPack = (AniPack*)GetHead(&aniInfo.queueList);
-        Serial.printf("ANI_SwapAnimation: queue type 0x%x\r\n", aniPack->currCriteria);
+        //Serial.printf("ANI_SwapAnimation: queue type 0x%x\r\n", aniPack->currCriteria);
 
         aniPack->parms.startTime = millis();
         aniPack->parms.delay = millis();
@@ -1027,19 +1020,4 @@ void AniTransDone()
             AniSetInactive(aniPack);
         }
     }
-}
-
-/* --------------------------------------------------------------------------------------------
- *                 AniCheckTranDel()
- * --------------------------------------------------------------------------------------------
- * Description:    Checks the elapsed time since the last frame draw for this animation is longer
- *                 than the fps target
- *
- * Parameters:     
- *
- * Returns:        
- */
-bool AniCheckTranDel(AniParms *Ap)
-{
-    return (millis() > Ap->delay);
 }
